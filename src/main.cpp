@@ -221,6 +221,7 @@ enum class Action {
   StartSearch,
   ValidateSearch,
   ClearSearch,
+  ShowInfo,
 };
 
 static void moveSel(size_t &sel, int delta, size_t count) {
@@ -616,6 +617,8 @@ int main(int argc, char **argv) {
     } else if (ui.popup == PopupMode::ConfirmDelete) {
       evt("y", tr(Str::Delete), cPl, Event::Character('y'));
       evt("n", tr(Str::Cancel), cNav, Event::Character('n'));
+    } else if (ui.popup == PopupMode::Info) {
+      evt("esc", tr(Str::Close), cNav, Event::Escape);
     } else if (ui.popup == PopupMode::Help) {
       evt("esc", tr(Str::CloseHelp), cNav, Event::Escape);
       evt("?", tr(Str::CloseHelp), cNav, Event::Character('?'));
@@ -642,6 +645,7 @@ int main(int argc, char **argv) {
       act("/", tr(Str::SearchChip), cNav, Action::StartSearch);
       act("a", tr(Str::AddFile), cPl, Action::AddFile);
       act("p", tr(Str::PlaylistsChip), cPl, Action::OpenPlaylists);
+      act("i", tr(Str::InfoChip), cNav, Action::ShowInfo);
       act("?", tr(Str::HelpChip), cPl, Action::ToggleHelp);
 
       int total = 0;
@@ -732,6 +736,36 @@ int main(int argc, char **argv) {
              reflect(popupPanelBox);
     }
 
+    if (ui.popup == PopupMode::Info) {
+      const Track &t = ui.infoTrack;
+      auto row = [&](const char *label, const std::string &value) {
+        return hbox({text(" " + std::string(label) + " ") | bold |
+                         color(Color::Cyan),
+                     text(value) | flex});
+      };
+      auto dash = [](const std::string &s) {
+        return s.empty() ? std::string("—") : s;
+      };
+      Element content = vbox({
+          row(tr(Str::InfoTitleTag), dash(t.title)),
+          row(tr(Str::InfoArtist), dash(t.artist)),
+          row(tr(Str::InfoAlbum), dash(t.album)),
+          row(tr(Str::InfoTrackNo),
+              t.trackNumber > 0 ? std::to_string(t.trackNumber)
+                                : std::string("—")),
+          row(tr(Str::InfoDuration), fmtTrackTime(t.durationSec)),
+          row(tr(Str::InfoBitrate),
+              t.bitrate > 0 ? std::to_string(t.bitrate) + " kbps"
+                            : std::string("—")),
+          row(tr(Str::InfoPath), t.path.string()),
+          separator(),
+          text(std::string(tr(Str::Close)) + " : esc / i") | dim | center,
+      });
+      return window(text(" " + std::string(tr(Str::InfoTitle)) + " "),
+                    std::move(content)) |
+             size(WIDTH, EQUAL, 72) | reflect(popupPanelBox);
+    }
+
     if (ui.popup == PopupMode::ConfirmDelete) {
       return window(
                  text(" " + std::string(tr(Str::ConfirmTitle)) + " "),
@@ -791,6 +825,13 @@ int main(int argc, char **argv) {
   handlePopup = [&](Event e) -> bool {
     if (ui.popup == PopupMode::Help) {
       if (e == Event::Escape || e == Event::Character('?') ||
+          e == Event::Character('q'))
+        ui.popup = PopupMode::None;
+      return true;
+    }
+
+    if (ui.popup == PopupMode::Info) {
+      if (e == Event::Escape || e == Event::Character('i') ||
           e == Event::Character('q'))
         ui.popup = PopupMode::None;
       return true;
@@ -1086,6 +1127,29 @@ int main(int argc, char **argv) {
           player.enqueue(cachedTrack(p));
       break;
     }
+    case Action::ShowInfo: {
+      bool found = false;
+      if (inBrowser) {
+        const auto vis = browserVisible();
+        if (ui.browserSel > 0 && ui.browserSel <= vis.size()) {
+          const auto &entry = es[vis[ui.browserSel - 1]];
+          if (!entry.isDir) {
+            ui.infoTrack = cachedTrack(entry.path);
+            found = true;
+          }
+        }
+      } else {
+        const auto vis = queueVisible();
+        const auto &ts = player.queue().tracks();
+        if (ui.queueSel < vis.size() && vis[ui.queueSel] < ts.size()) {
+          ui.infoTrack = ts[vis[ui.queueSel]];
+          found = true;
+        }
+      }
+      if (found)
+        ui.popup = PopupMode::Info;
+      break;
+    }
     case Action::OpenPlaylists:
       refreshPlaylists();
       ui.plSel = 0;
@@ -1310,6 +1374,10 @@ int main(int argc, char **argv) {
     }
     if (e == Event::Character('P')) {
       perform(Action::AddToPlaylist);
+      return true;
+    }
+    if (e == Event::Character('i')) {
+      perform(Action::ShowInfo);
       return true;
     }
     if (e == Event::Return) {
