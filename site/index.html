@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Musica – terminal audio player (TUI) for Linux | lecteur audio en terminal</title>
+<meta name="description" content="Musica is a terminal audio player (TUI) written in C++20. Lecteur audio en terminal : dossiers, file d'attente, playlists, spectre.">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#1e1e2e" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#eff1f5" media="(prefers-color-scheme: light)">
+<link rel="canonical" href="https://leonidsergueigr.github.io/Musica/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Musica – terminal audio player">
+<meta property="og:description" content="A terminal audio player written in C++20. Un lecteur audio en terminal.">
+<meta property="og:url" content="https://leonidsergueigr.github.io/Musica/">
+<!-- Open Graph requires absolute URLs for the image. -->
+<meta property="og:image" content="https://leonidsergueigr.github.io/Musica/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Musica running in a terminal">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="fr_FR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Musica – terminal audio player">
+<meta name="twitter:description" content="A terminal audio player written in C++20.">
+<meta name="twitter:image" content="https://leonidsergueigr.github.io/Musica/assets/og.png">
+<link rel="stylesheet" href="style.css">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Musica",
+"description":"Terminal audio player (TUI) written in C++20.",
+"applicationCategory":"MultimediaApplication","operatingSystem":"Linux",
+"softwareVersion":"0.1.0","inLanguage":["en","fr"],
+"url":"https://leonidsergueigr.github.io/Musica/",
+"downloadUrl":"https://github.com/leonidsergueigr/Musica/releases/tag/v0.1.0",
+"sameAs":["https://github.com/leonidsergueigr/Musica"],
+"author":{"@type":"Person","name":"leonidsergueigr","url":"https://github.com/leonidsergueigr"}}
+</script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main"><span data-l="en">Skip to content</span><span data-l="fr">Aller au contenu</span></a>
+
+<header class="wrap">
+  <div class="topbar">
+    <nav aria-label="Main" data-fr-aria-label="Navigation principale">
+      <a href="#demo"><span data-l="en">Demo</span><span data-l="fr">Démo</span></a>
+      <a href="#features"><span data-l="en">Features</span><span data-l="fr">Fonctions</span></a>
+      <a href="#install"><span data-l="en">Install</span><span data-l="fr">Installation</span></a>
+      <a href="#shortcuts"><span data-l="en">Shortcuts</span><span data-l="fr">Raccourcis</span></a>
+      <a href="#config"><span data-l="en">Configuration</span><span data-l="fr">Configuration</span></a>
+    </nav>
+    <div class="lang" role="group" aria-label="Language" data-fr-aria-label="Langue">
+      <button type="button" data-set-lang="en" lang="en" aria-pressed="true" title="English">EN</button>
+      <button type="button" data-set-lang="fr" lang="fr" aria-pressed="false" title="Français">FR</button>
+    </div>
+  </div>
+  <h1>Musica</h1>
+  <p class="lead">
+    <span data-l="en">An audio player for the terminal, written in C++20. Browse your folders, build a queue, play playlists.</span>
+    <span data-l="fr">Un lecteur audio pour le terminal, écrit en C++20. Parcourez vos dossiers, composez une file d'attente, lisez vos playlists.</span>
+  </p>
+  <p class="hero-actions">
+    <a class="btn primary" href="#install"><span data-l="en">Install</span><span data-l="fr">Installer</span></a>
+    <a class="btn" href="https://github.com/leonidsergueigr/Musica">GitHub</a>
+  </p>
+</header>
+
+<main id="main" class="wrap">
+
+<section id="demo" class="demo" aria-labelledby="h-demo">
+  <h2 id="h-demo"><span data-l="en">Demo</span><span data-l="fr">Démo</span></h2>
+  <video id="demo-video" width="1200" height="760" autoplay loop muted playsinline preload="metadata"
+    poster="assets/demo-poster.jpg"
+    aria-label="Musica in a terminal: browsing a folder, playing a track with its cover, searching, opening the track info and the help."
+    data-fr-aria-label="Musica dans un terminal : parcours d'un dossier, lecture d'un morceau avec sa pochette, recherche, fenêtre d'infos du morceau et aide.">
+    <source src="assets/musica.webm" type="video/webm">
+    <source src="assets/musica.mp4" type="video/mp4">
+    <img src="assets/musica.gif" width="1200" height="760" loading="lazy"
+      alt="Musica in a terminal: browsing a folder, playing a track with its cover, searching, opening the track info and the help."
+      data-fr-alt="Musica dans un terminal : parcours d'un dossier, lecture d'un morceau avec sa pochette, recherche, fenêtre d'infos du morceau et aide.">
+  </video>
+  <p class="muted">
+    <span data-l="en">Recorded with VHS: folder browsing, playback, next track, search, track info, help.</span>
+    <span data-l="fr">Enregistré avec VHS : parcours des dossiers, lecture, morceau suivant, recherche, infos du morceau, aide.</span>
+  </p>
+</section>
+
+<section id="features" aria-labelledby="h-feat">
+  <h2 id="h-feat"><span data-l="en">Features</span><span data-l="fr">Fonctionnalités</span></h2>
+  <!-- TODO(owner): check against the README; add audio formats and .m3u only if confirmed. -->
+  <ul class="features">
+    <li><strong><span data-l="en">Folder browser</span><span data-l="fr">Navigateur de dossiers</span></strong>
+      <span data-l="en">Move through your folders and start a track with <kbd>Enter</kbd>.</span>
+      <span data-l="fr">Parcourez vos dossiers et lancez un morceau avec <kbd>Entrée</kbd>.</span></li>
+    <li><strong><span data-l="en">Queue</span><span data-l="fr">File d'attente</span></strong>
+      <span data-l="en">Tracks play from a queue. <kbd>n</kbd> jumps to the next one.</span>
+      <span data-l="fr">Les morceaux se lisent depuis une file d'attente. <kbd>n</kbd> passe au suivant.</span></li>
+    <li><strong>Playlists</strong>
+      <span data-l="en">Playlists are stored in <code>~/.config/musica/</code>.</span>
+      <span data-l="fr">Les playlists sont stockées dans <code>~/.config/musica/</code>.</span></li>
+    <li><strong><span data-l="en">Spectrum</span><span data-l="fr">Spectre</span></strong>
+      <span data-l="en">A real-time audio spectrum.</span>
+      <span data-l="fr">Un spectre audio en temps réel.</span></li>
+    <li><strong><span data-l="en">Covers and tags</span><span data-l="fr">Pochettes et tags</span></strong>
+      <span data-l="en">Shows the cover and the metadata of the playing track.</span>
+      <span data-l="fr">Affiche la pochette et les métadonnées du morceau en cours.</span></li>
+    <li><strong><span data-l="en">Search</span><span data-l="fr">Recherche</span></strong>
+      <span data-l="en">Press <kbd>/</kbd> to filter the browser panel as you type.</span>
+      <span data-l="fr">Appuyez sur <kbd>/</kbd> pour filtrer le panneau de navigation pendant la frappe.</span></li>
+    <li><strong><span data-l="en">Mouse</span><span data-l="fr">Souris</span></strong>
+      <span data-l="en">Mouse support is on by default. <code>--no-mouse</code> turns it off.</span>
+      <span data-l="fr">La souris est activée par défaut. <code>--no-mouse</code> la désactive.</span></li>
+    <li><strong><span data-l="en">French and English</span><span data-l="fr">Français et anglais</span></strong>
+      <span data-l="en">The interface exists in both languages. Choose one with <code>--lang</code>.</span>
+      <span data-l="fr">L'interface existe dans les deux langues. Choisissez avec <code>--lang</code>.</span></li>
+  </ul>
+</section>
+
+<section id="install" aria-labelledby="h-install">
+  <h2 id="h-install"><span data-l="en">Installation</span><span data-l="fr">Installation</span></h2>
+  <p>
+    <span data-l="en">Musica 0.1.0 is published as Linux packages (x86_64) on the <a href="https://github.com/leonidsergueigr/Musica/releases/tag/v0.1.0">GitHub release page</a>. Pick your format.</span>
+    <span data-l="fr">Musica 0.1.0 est publié sous forme de paquets Linux (x86_64) sur la <a href="https://github.com/leonidsergueigr/Musica/releases/tag/v0.1.0">page de release GitHub</a>. Choisissez votre format.</span>
+  </p>
+  <!-- TODO(owner): update version and file names at each release. -->
+  <div class="tabs">
+    <div role="tablist" aria-label="Package format" data-fr-aria-label="Format du paquet" hidden>
+      <button type="button" role="tab" id="t-deb" aria-controls="p-deb" aria-selected="true">.deb</button>
+      <button type="button" role="tab" id="t-rpm" aria-controls="p-rpm" aria-selected="false" tabindex="-1">.rpm</button>
+      <button type="button" role="tab" id="t-tgz" aria-controls="p-tgz" aria-selected="false" tabindex="-1">.tar.gz</button>
+    </div>
+
+    <div role="tabpanel" id="p-deb" aria-labelledby="t-deb">
+      <h3><span data-l="en">.deb (Debian, Ubuntu and derivatives)</span><span data-l="fr">.deb (Debian, Ubuntu et dérivées)</span></h3>
+      <div class="term"><div class="term-bar"><span>bash</span><button type="button" class="copy" data-target="c-deb" hidden><span class="lbl"></span></button></div>
+<pre tabindex="0"><code id="c-deb"><span class="l">curl -LO https://github.com/leonidsergueigr/Musica/releases/download/v0.1.0/musica-0.1.0-Linux.deb</span>
+<span class="l">sudo apt install ./musica-0.1.0-Linux.deb</span>
+<span class="l">musica --version</span></code></pre></div>
+    </div>
+
+    <div role="tabpanel" id="p-rpm" aria-labelledby="t-rpm">
+      <h3><span data-l="en">.rpm (Fedora and other RPM-based distributions)</span><span data-l="fr">.rpm (Fedora et autres distributions RPM)</span></h3>
+      <div class="term"><div class="term-bar"><span>bash</span><button type="button" class="copy" data-target="c-rpm" hidden><span class="lbl"></span></button></div>
+<pre tabindex="0"><code id="c-rpm"><span class="l">curl -LO https://github.com/leonidsergueigr/Musica/releases/download/v0.1.0/musica-0.1.0-Linux.rpm</span>
+<span class="l">sudo dnf install ./musica-0.1.0-Linux.rpm</span>
+<span class="l">musica --version</span></code></pre></div>
+    </div>
+
+    <div role="tabpanel" id="p-tgz" aria-labelledby="t-tgz">
+      <h3><span data-l="en">.tar.gz (any x86_64 Linux)</span><span data-l="fr">.tar.gz (tout Linux x86_64)</span></h3>
+      <div class="term"><div class="term-bar"><span>bash</span><button type="button" class="copy" data-target="c-tgz" hidden><span class="lbl"></span></button></div>
+<pre tabindex="0"><code id="c-tgz"><span class="l">curl -LO https://github.com/leonidsergueigr/Musica/releases/download/v0.1.0/musica-0.1.0-linux-x86_64.tar.gz</span>
+<span class="l">tar -xzf musica-0.1.0-linux-x86_64.tar.gz</span></code></pre></div>
+      <!-- TODO(owner): state where the binary is inside the archive (run `tar -tzf`). -->
+      <p><span data-l="en">Run the <code>musica</code> binary from the extracted folder.</span>
+         <span data-l="fr">Lancez le binaire <code>musica</code> du dossier extrait.</span></p>
+    </div>
+  </div>
+
+  <h3><span data-l="en">Check the download</span><span data-l="fr">Vérifier le téléchargement</span></h3>
+  <p><span data-l="en">The release includes a <code>SHA256SUMS</code> file. Run this in the folder that holds your download.</span>
+     <span data-l="fr">La release contient un fichier <code>SHA256SUMS</code>. Lancez ceci dans le dossier du téléchargement.</span></p>
+  <div class="term"><div class="term-bar"><span>bash</span><button type="button" class="copy" data-target="c-sha" hidden><span class="lbl"></span></button></div>
+<pre tabindex="0"><code id="c-sha"><span class="l">curl -LO https://github.com/leonidsergueigr/Musica/releases/download/v0.1.0/SHA256SUMS</span>
+<span class="l">sha256sum --ignore-missing -c SHA256SUMS</span></code></pre></div>
+</section>
+
+<section id="shortcuts" aria-labelledby="h-keys">
+  <h2 id="h-keys"><span data-l="en">Shortcuts</span><span data-l="fr">Raccourcis</span></h2>
+  <p><span data-l="en">Press <kbd>?</kbd> in Musica to see the full list.</span>
+     <span data-l="fr">Appuyez sur <kbd>?</kbd> dans Musica pour voir la liste complète.</span></p>
+  <!-- TODO(owner): complete from the code/README (up, volume, seek, queue, playlists, quit, mouse actions). Do not guess. -->
+  <div class="scroll" tabindex="0" role="region" aria-label="Keyboard shortcuts" data-fr-aria-label="Raccourcis clavier">
+    <table>
+      <thead><tr><th scope="col"><span data-l="en">Input</span><span data-l="fr">Touche</span></th><th scope="col">Action</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>↓</kbd></td><td><span data-l="en">Move the selection down</span><span data-l="fr">Descendre la sélection</span></td></tr>
+        <tr><td><kbd>Enter</kbd></td><td><span data-l="en">Play the selected track</span><span data-l="fr">Lire le morceau sélectionné</span></td></tr>
+        <tr><td><kbd>Space</kbd></td><td><span data-l="en">Pause or resume</span><span data-l="fr">Pause ou reprise</span></td></tr>
+        <tr><td><kbd>n</kbd></td><td><span data-l="en">Next track</span><span data-l="fr">Morceau suivant</span></td></tr>
+        <tr><td><kbd>/</kbd></td><td><span data-l="en">Search</span><span data-l="fr">Rechercher</span></td></tr>
+        <tr><td><kbd>i</kbd></td><td><span data-l="en">Info on the selected track</span><span data-l="fr">Infos sur le morceau sélectionné</span></td></tr>
+        <tr><td><kbd>?</kbd></td><td><span data-l="en">Show the keyboard help</span><span data-l="fr">Afficher l'aide des touches</span></td></tr>
+        <tr><td><kbd>Esc</kbd></td><td><span data-l="en">Close the search or a popup</span><span data-l="fr">Fermer la recherche ou une fenêtre</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="config" aria-labelledby="h-config">
+  <h2 id="h-config">Configuration</h2>
+  <p>
+    <span data-l="en">Musica keeps its playlists and its state file in <code>~/.config/musica/</code>. It follows <code>XDG_CONFIG_HOME</code> when set.</span>
+    <span data-l="fr">Musica garde ses playlists et son fichier d'état dans <code>~/.config/musica/</code>. Il suit <code>XDG_CONFIG_HOME</code> s'il est défini.</span>
+  </p>
+  <!-- TODO(owner): confirm XDG_CONFIG_HOME behaviour and name the state file; give the --lang argument syntax from --help. -->
+  <div class="scroll" tabindex="0" role="region" aria-label="Command-line options" data-fr-aria-label="Options de ligne de commande">
+    <table>
+      <thead><tr><th scope="col"><span data-l="en">Option</span><span data-l="fr">Option</span></th><th scope="col"><span data-l="en">Effect</span><span data-l="fr">Effet</span></th></tr></thead>
+      <tbody>
+        <tr><td><code>--lang</code></td><td><span data-l="en">Set the interface language (French or English)</span><span data-l="fr">Choisir la langue de l'interface (français ou anglais)</span></td></tr>
+        <tr><td><code>--no-mouse</code></td><td><span data-l="en">Turn off mouse support</span><span data-l="fr">Désactiver la souris</span></td></tr>
+        <tr><td><code>--help</code></td><td><span data-l="en">Print the help and exit</span><span data-l="fr">Afficher l'aide et quitter</span></td></tr>
+        <tr><td><code>--version</code></td><td><span data-l="en">Print the version and exit</span><span data-l="fr">Afficher la version et quitter</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+</main>
+
+<footer class="wrap">
+  <p>
+    <a href="https://github.com/leonidsergueigr/Musica/blob/main/LICENSE"><span data-l="en">License</span><span data-l="fr">Licence</span></a> ·
+    <a href="https://github.com/leonidsergueigr/Musica/issues"><span data-l="en">Issues</span><span data-l="fr">Signaler un problème</span></a> ·
+    <a href="https://github.com/leonidsergueigr/Musica">GitHub</a>
+  </p>
+  <p class="muted">
+    <span data-l="en">Built with</span><span data-l="fr">Construit avec</span>
+    <a href="https://github.com/mackron/miniaudio">miniaudio</a>,
+    <a href="https://github.com/ArthurSonzogni/FTXUI">FTXUI</a>,
+    <a href="https://taglib.org/">TagLib</a>
+    <span data-l="en">and</span><span data-l="fr">et</span>
+    <a href="https://github.com/nothings/stb">stb</a>.
+  </p>
+  <!-- TODO(owner): add the year and your real name if you want them shown. -->
+  <p class="muted">© leonidsergueigr</p>
+</footer>
+<p id="status" class="sr" role="status"></p>
+</body>
+</html>
