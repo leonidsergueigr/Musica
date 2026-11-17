@@ -836,6 +836,13 @@ int main(int argc, char **argv) {
 
   auto root = Renderer([&]() -> Element {
     std::lock_guard<std::mutex> lk(mtx);
+    // Terminal trop petit : un message clair plutôt qu'une mise en page cassée.
+    if (screen.dimx() < 40 || screen.dimy() < 12) {
+      return vbox({filler(),
+                   text(tr(Str::TerminalTooSmall)) | bold | center,
+                   filler()}) |
+             center;
+    }
     Element base =
         vbox({renderBar(), hbox({renderBrowser(), renderQueue()}) | flex,
               renderCommands()});
