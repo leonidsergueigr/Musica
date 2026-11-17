@@ -1,4 +1,5 @@
 #include "PlaylistStore.hpp"
+
 #include <algorithm>
 #include <cstdlib>
 #include <fstream>
@@ -23,7 +24,8 @@ std::vector<std::string> PlaylistStore::list() const {
   std::error_code ec;
   for (fs::directory_iterator it(dir_, ec), end; !ec && it != end;
        it.increment(ec))
-    if (it->path().extension() == ".m3u") out.push_back(it->path().stem().string());
+    if (it->path().extension() == ".m3u")
+      out.push_back(it->path().stem().string());
   std::sort(out.begin(), out.end());
   return out;
 }
@@ -41,7 +43,8 @@ bool PlaylistStore::remove(const std::string &n) {
 
 bool PlaylistStore::rename(const std::string &a, const std::string &b) {
   std::error_code ec;
-  if (fs::exists(fileFor(b))) return false;
+  if (fs::exists(fileFor(b)))
+    return false;
   fs::rename(fileFor(a), fileFor(b), ec);
   return !ec;
 }
@@ -51,15 +54,18 @@ std::vector<fs::path> PlaylistStore::load(const std::string &n) const {
   std::ifstream f(fileFor(n));
   std::string line;
   while (std::getline(f, line))
-    if (!line.empty() && line[0] != '#') out.emplace_back(line);
+    if (!line.empty() && line[0] != '#')
+      out.emplace_back(line);
   return out;
 }
 
 bool PlaylistStore::save(const std::string &n, const std::vector<fs::path> &t) {
   std::ofstream f(fileFor(n), std::ios::trunc);
-  if (!f) return false;
+  if (!f)
+    return false;
   f << "#EXTM3U\n";
-  for (auto &p : t) f << p.string() << '\n';
+  for (auto &p : t)
+    f << p.string() << '\n';
   return true;
 }
 

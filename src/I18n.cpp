@@ -17,20 +17,22 @@ const char *kFr[] = {
 #undef MUSICA_STR_FR
 };
 
-static_assert(sizeof(kEn) / sizeof(kEn[0]) ==
-                  static_cast<size_t>(Str::Count),
+static_assert(sizeof(kEn) / sizeof(kEn[0]) == static_cast<size_t>(Str::Count),
               "English table size mismatch");
-static_assert(sizeof(kFr) / sizeof(kFr[0]) ==
-                  static_cast<size_t>(Str::Count),
+static_assert(sizeof(kFr) / sizeof(kFr[0]) == static_cast<size_t>(Str::Count),
               "French table size mismatch");
 
 Lang g_lang = Lang::En;
 
 } // namespace
 
-void setLang(Lang l) { g_lang = l; }
+void setLang(Lang l) {
+  g_lang = l;
+}
 
-Lang currentLang() { return g_lang; }
+Lang currentLang() {
+  return g_lang;
+}
 
 Lang detectLang() {
   for (const char *var : {"LC_ALL", "LC_MESSAGES", "LANG"}) {

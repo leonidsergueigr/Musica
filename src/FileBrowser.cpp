@@ -1,5 +1,7 @@
 #include "FileBrowser.hpp"
+
 #include "Track.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <filesystem>

@@ -1,4 +1,5 @@
 #include "Queue.hpp"
+
 #include <algorithm>
 #include <numeric>
 #include <random>

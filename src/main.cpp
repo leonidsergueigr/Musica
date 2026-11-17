@@ -6,6 +6,7 @@
 #include "StateStore.hpp"
 #include "Track.hpp"
 #include "UiState.hpp"
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -15,12 +16,12 @@
 #include <condition_variable>
 #include <cstdio>
 #include <filesystem>
-#include <functional>
-#include <memory>
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/string.hpp>
+#include <functional>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -71,9 +72,9 @@ static std::string barString(float frac, int width, bool asciiCursor = false) {
 
 // Multi-row spectrum: the top cell of each bar uses the eight ▁▂▃▄▅▆▇█ levels
 // for sub-cell precision.
-static Element renderSpectrumElement(
-    const std::array<float, Spectrum::kBands> &bands, int barCount, int rows,
-    int barWidth, bool gap) {
+static Element
+renderSpectrumElement(const std::array<float, Spectrum::kBands> &bands,
+                      int barCount, int rows, int barWidth, bool gap) {
   static const char *levels[] = {"▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"};
   barCount = std::max(1, barCount);
   rows = std::max(1, rows);
@@ -82,8 +83,8 @@ static Element renderSpectrumElement(
   Elements cols;
   for (int j = 0; j < barCount; ++j) {
     const int b0 = j * static_cast<int>(Spectrum::kBands) / barCount;
-    const int b1 = std::max(b0 + 1, (j + 1) * static_cast<int>(Spectrum::kBands) /
-                                       barCount);
+    const int b1 = std::max(
+        b0 + 1, (j + 1) * static_cast<int>(Spectrum::kBands) / barCount);
     float v = 0.0f;
     for (int k = b0; k < b1 && k < static_cast<int>(bands.size()); ++k)
       v = std::max(v, bands[k]);
@@ -132,14 +133,14 @@ static std::string foldText(const std::string &in) {
     if (static_cast<unsigned char>(c) < 0x80)
       c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
   static const char *pairs[][2] = {
-      {"à", "a"}, {"á", "a"}, {"â", "a"}, {"ä", "a"}, {"ã", "a"},
-      {"å", "a"}, {"À", "a"}, {"Á", "a"}, {"Â", "a"}, {"Ä", "a"},
-      {"é", "e"}, {"è", "e"}, {"ê", "e"}, {"ë", "e"}, {"É", "e"},
-      {"È", "e"}, {"Ê", "e"}, {"Ë", "e"}, {"î", "i"}, {"ï", "i"},
-      {"í", "i"}, {"Î", "i"}, {"Ï", "i"}, {"ô", "o"}, {"ö", "o"},
-      {"ó", "o"}, {"õ", "o"}, {"Ô", "o"}, {"Ö", "o"}, {"û", "u"},
-      {"ù", "u"}, {"ü", "u"}, {"ú", "u"}, {"Û", "u"}, {"Ù", "u"},
-      {"Ü", "u"}, {"ç", "c"}, {"Ç", "c"}, {"ñ", "n"}, {"Ñ", "n"},
+      {"à", "a"},  {"á", "a"},  {"â", "a"},  {"ä", "a"},  {"ã", "a"},
+      {"å", "a"},  {"À", "a"},  {"Á", "a"},  {"Â", "a"},  {"Ä", "a"},
+      {"é", "e"},  {"è", "e"},  {"ê", "e"},  {"ë", "e"},  {"É", "e"},
+      {"È", "e"},  {"Ê", "e"},  {"Ë", "e"},  {"î", "i"},  {"ï", "i"},
+      {"í", "i"},  {"Î", "i"},  {"Ï", "i"},  {"ô", "o"},  {"ö", "o"},
+      {"ó", "o"},  {"õ", "o"},  {"Ô", "o"},  {"Ö", "o"},  {"û", "u"},
+      {"ù", "u"},  {"ü", "u"},  {"ú", "u"},  {"Û", "u"},  {"Ù", "u"},
+      {"Ü", "u"},  {"ç", "c"},  {"Ç", "c"},  {"ñ", "n"},  {"Ñ", "n"},
       {"œ", "oe"}, {"Œ", "oe"}, {"æ", "ae"}, {"Æ", "ae"}, {"ÿ", "y"},
   };
   for (const auto &p : pairs)
@@ -383,8 +384,8 @@ int main(int argc, char **argv) {
     std::vector<size_t> out;
     const auto &es = browser.entries();
     for (size_t i = 0; i < es.size(); ++i) {
-      const bool filtered = ui.searchPanel == Panel::Browser &&
-                            !ui.query.empty();
+      const bool filtered =
+          ui.searchPanel == Panel::Browser && !ui.query.empty();
       if (!filtered || containsFold(es[i].name, ui.query))
         out.push_back(i);
     }
@@ -394,8 +395,7 @@ int main(int argc, char **argv) {
     std::vector<size_t> out;
     const auto &ts = player.queue().tracks();
     for (size_t i = 0; i < ts.size(); ++i) {
-      const bool filtered =
-          ui.searchPanel == Panel::Queue && !ui.query.empty();
+      const bool filtered = ui.searchPanel == Panel::Queue && !ui.query.empty();
       if (!filtered ||
           containsFold(ts[i].title + " " + ts[i].artist + " " + ts[i].album,
                        ui.query))
@@ -406,9 +406,9 @@ int main(int argc, char **argv) {
 
   auto chipElement = [](const std::string &key, const std::string &label,
                         const Color &c) {
-    return hbox({text(" " + key + " ") | bgcolor(c) | color(Color::Black) |
-                     bold,
-                 text(" " + label)});
+    return hbox(
+        {text(" " + key + " ") | bgcolor(c) | color(Color::Black) | bold,
+         text(" " + label)});
   };
 
   auto renderBar = [&] {
@@ -421,9 +421,8 @@ int main(int argc, char **argv) {
 
     std::string title = t ? t->title : tr(Str::NowPlayingNone);
     std::string artist = (t && !t->artist.empty()) ? t->artist : "";
-    std::string nowPlaying =
-        std::string(player.isPlaying() ? "▶ " : "⏸ ") +
-        (artist.empty() ? title : artist + " — " + title);
+    std::string nowPlaying = std::string(player.isPlaying() ? "▶ " : "⏸ ") +
+                             (artist.empty() ? title : artist + " — " + title);
 
     const std::string shuffleLabel =
         player.queue().shuffle() ? "⇄ on" : "⇄ off";
@@ -450,23 +449,24 @@ int main(int argc, char **argv) {
       spectrum = hbox({filler(), spectrum, filler()});
 
     const int barW = std::max(10, screenW - leftW - 4 - 14);
-    Element progressBar = text(barString(dur > 0 ? pos / dur : 0.f, barW)) |
-                          reflect(progressBox);
+    Element progressBar =
+        text(barString(dur > 0 ? pos / dur : 0.f, barW)) | reflect(progressBox);
     Element volumeBar =
         text(barString(player.volume(), 10)) | reflect(volumeBox);
 
     Element right = vbox({
         spectrum,
-        hbox({text(fmtTime(pos)) | dim, progressBar, text(" " + fmtTime(dur)) | dim}),
+        hbox({text(fmtTime(pos)) | dim, progressBar,
+              text(" " + fmtTime(dur)) | dim}),
         text(nowPlaying) | bold | center,
         hbox({text("⏮") | reflect(prevBox), text("  "),
               text("⏯") | reflect(playBox), text("  "),
               text("⏭") | reflect(nextBox), text("   "),
               text(shuffleLabel) | reflect(shuffleBox), text("   "),
               text(repeatLabel) | reflect(repeatBox),
-              text("   " + std::string(tr(Str::VolumeLabel)) + " "),
-              volumeBar,
-              text(" " + std::to_string(static_cast<int>(player.volume() * 100)) +
+              text("   " + std::string(tr(Str::VolumeLabel)) + " "), volumeBar,
+              text(" " +
+                   std::to_string(static_cast<int>(player.volume() * 100)) +
                    "%")}) |
             center,
     });
@@ -475,10 +475,11 @@ int main(int argc, char **argv) {
       return window(text(" Musica "), std::move(right)) | flex;
 
     Element logo = vbox({
-        filler(),
-        text("M U S I C A") | bold | color(Color::Cyan) | center,
-        filler(),
-    }) | size(WIDTH, EQUAL, logoW);
+                       filler(),
+                       text("M U S I C A") | bold | color(Color::Cyan) | center,
+                       filler(),
+                   }) |
+                   size(WIDTH, EQUAL, logoW);
 
     Element leftBox = std::move(logo);
     if (showCover) {
@@ -487,15 +488,16 @@ int main(int argc, char **argv) {
         std::lock_guard<std::mutex> lk(coverMutex);
         art = currentCover;
       }
-      Element cover = art
-          ? renderCover(*art, coverW, coverH)
-          : vbox({filler(), text("♪") | center | dim, filler()}) |
-                size(WIDTH, EQUAL, coverW) | size(HEIGHT, EQUAL, coverH);
+      Element cover =
+          art ? renderCover(*art, coverW, coverH)
+              : vbox({filler(), text("♪") | center | dim, filler()}) |
+                    size(WIDTH, EQUAL, coverW) | size(HEIGHT, EQUAL, coverH);
       leftBox = hbox({
-          vbox({filler(), std::move(cover), filler()}),
-          text(" "),
-          std::move(leftBox),
-      }) | size(WIDTH, EQUAL, leftW);
+                    vbox({filler(), std::move(cover), filler()}),
+                    text(" "),
+                    std::move(leftBox),
+                }) |
+                size(WIDTH, EQUAL, leftW);
     }
 
     return window(text(" Musica "),
@@ -526,9 +528,9 @@ int main(int argc, char **argv) {
     std::string titleText = " " + browser.cwd().string() + " ";
     if (ui.searchPanel == Panel::Browser && !ui.query.empty()) {
       titleText =
-          " " + trf(vis.size() == 1 ? Str::FilterIndicatorOne
-                                    : Str::FilterIndicator,
-                    {ui.query, std::to_string(vis.size())}) +
+          " " +
+          trf(vis.size() == 1 ? Str::FilterIndicatorOne : Str::FilterIndicator,
+              {ui.query, std::to_string(vis.size())}) +
           " ";
     }
     auto box = window(text(titleText),
@@ -550,7 +552,8 @@ int main(int argc, char **argv) {
     queueRowBoxes.assign(vis.size(), Box{});
     for (size_t i = 0; i < vis.size(); ++i) {
       const Track &t = tracks[vis[i]];
-      bool cur = player.currentTrack() && vis[i] == player.queue().currentIndex();
+      bool cur =
+          player.currentTrack() && vis[i] == player.queue().currentIndex();
       Element row = hbox({text(cur ? "▶ " : "  "), text(t.title) | flex,
                           text(" " + fmtTrackTime(t.durationSec))}) |
                     reflect(queueRowBoxes[i]);
@@ -563,9 +566,9 @@ int main(int argc, char **argv) {
     std::string queueTitle = " " + std::string(tr(Str::QueueTitle)) + " ";
     if (ui.searchPanel == Panel::Queue && !ui.query.empty()) {
       queueTitle =
-          " " + trf(vis.size() == 1 ? Str::FilterIndicatorOne
-                                    : Str::FilterIndicator,
-                    {ui.query, std::to_string(vis.size())}) +
+          " " +
+          trf(vis.size() == 1 ? Str::FilterIndicatorOne : Str::FilterIndicator,
+              {ui.query, std::to_string(vis.size())}) +
           " ";
     }
     auto box =
@@ -573,7 +576,7 @@ int main(int argc, char **argv) {
                vbox({vbox(std::move(rows)) | vscroll_indicator | yframe | flex,
                      separator(),
                      text(trf(tracks.size() == 1 ? Str::TrackCountOne
-                                                : Str::TracksCount,
+                                                 : Str::TracksCount,
                               {std::to_string(tracks.size())}) +
                           " · " + fmtTrackTime(total))})) |
         flex | reflect(queuePanelBox);
@@ -665,7 +668,8 @@ int main(int argc, char **argv) {
 
       int total = 0;
       for (const auto &s : specs)
-        total += string_width(s.key) + string_width(s.label) + 3 + (total ? 2 : 0);
+        total +=
+            string_width(s.key) + string_width(s.label) + 3 + (total ? 2 : 0);
       if (total > screen.dimx() - 4)
         compactSet();
     }
@@ -699,8 +703,7 @@ int main(int argc, char **argv) {
 
     Elements content;
     if (ui.searching)
-      content.push_back(hbox({text(" / "), text(ui.query),
-                              text("█") | blink}));
+      content.push_back(hbox({text(" / "), text(ui.query), text("█") | blink}));
     content.push_back(msg);
     content.push_back(hbox(std::move(row)));
 
@@ -711,8 +714,8 @@ int main(int argc, char **argv) {
   auto renderPopup = [&]() -> Element {
     if (ui.popup == PopupMode::Help) {
       auto key = [&](const std::string &k, const std::string &l) {
-        return hbox({text(" " + k + " ") | color(Color::Cyan) | bold,
-                     text(" " + l)});
+        return hbox(
+            {text(" " + k + " ") | color(Color::Cyan) | bold, text(" " + l)});
       };
       Element left = vbox({
           text(tr(Str::HelpPlayback)) | bold | color(Color::Cyan),
@@ -754,9 +757,9 @@ int main(int argc, char **argv) {
     if (ui.popup == PopupMode::Info) {
       const Track &t = ui.infoTrack;
       auto row = [&](const char *label, const std::string &value) {
-        return hbox({text(" " + std::string(label) + " ") | bold |
-                         color(Color::Cyan),
-                     text(value) | flex});
+        return hbox(
+            {text(" " + std::string(label) + " ") | bold | color(Color::Cyan),
+             text(value) | flex});
       };
       auto dash = [](const std::string &s) {
         return s.empty() ? std::string("—") : s;
@@ -765,13 +768,13 @@ int main(int argc, char **argv) {
           row(tr(Str::InfoTitleTag), dash(t.title)),
           row(tr(Str::InfoArtist), dash(t.artist)),
           row(tr(Str::InfoAlbum), dash(t.album)),
-          row(tr(Str::InfoTrackNo),
-              t.trackNumber > 0 ? std::to_string(t.trackNumber)
-                                : std::string("—")),
+          row(tr(Str::InfoTrackNo), t.trackNumber > 0
+                                        ? std::to_string(t.trackNumber)
+                                        : std::string("—")),
           row(tr(Str::InfoDuration), fmtTrackTime(t.durationSec)),
-          row(tr(Str::InfoBitrate),
-              t.bitrate > 0 ? std::to_string(t.bitrate) + " kbps"
-                            : std::string("—")),
+          row(tr(Str::InfoBitrate), t.bitrate > 0
+                                        ? std::to_string(t.bitrate) + " kbps"
+                                        : std::string("—")),
           row(tr(Str::InfoPath), t.path.string()),
           separator(),
           text(std::string(tr(Str::Close)) + " : esc / i") | dim | center,
@@ -782,10 +785,9 @@ int main(int argc, char **argv) {
     }
 
     if (ui.popup == PopupMode::ConfirmDelete) {
-      return window(
-                 text(" " + std::string(tr(Str::ConfirmTitle)) + " "),
-                 vbox({text(trf(Str::ConfirmDelete, {ui.target})),
-                       text(std::string("  ") + tr(Str::YesNo)) | dim})) |
+      return window(text(" " + std::string(tr(Str::ConfirmTitle)) + " "),
+                    vbox({text(trf(Str::ConfirmDelete, {ui.target})),
+                          text(std::string("  ") + tr(Str::YesNo)) | dim})) |
              size(WIDTH, EQUAL, 40) | reflect(popupPanelBox);
     }
 
@@ -803,7 +805,7 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i < plNames.size(); ++i) {
       Element row = hbox({text("  " + plNames[i]) | flex,
                           text(trf(plCounts[i] == 1 ? Str::TrackCountOne
-                                                   : Str::TracksCount,
+                                                    : Str::TracksCount,
                                    {std::to_string(plCounts[i])}) +
                                "  ")}) |
                     reflect(popupRowBoxes[i]);
@@ -819,18 +821,18 @@ int main(int argc, char **argv) {
     rows.push_back(separator());
 
     bool adding = ui.popup == PopupMode::AddTrack;
-    return window(text(adding
-                            ? " " + std::string(tr(Str::AddToPlaylistTitle)) + " "
-                            : " " + std::string(tr(Str::PlaylistsTitle)) + " "),
-                  vbox(std::move(rows))) |
+    return window(
+               text(adding
+                        ? " " + std::string(tr(Str::AddToPlaylistTitle)) + " "
+                        : " " + std::string(tr(Str::PlaylistsTitle)) + " "),
+               vbox(std::move(rows))) |
            size(WIDTH, EQUAL, 70) | reflect(popupPanelBox);
   };
 
   auto root = Renderer([&]() -> Element {
     std::lock_guard<std::mutex> lk(mtx);
     if (screen.dimx() < 40 || screen.dimy() < 12) {
-      return vbox({filler(),
-                   text(tr(Str::TerminalTooSmall)) | bold | center,
+      return vbox({filler(), text(tr(Str::TerminalTooSmall)) | bold | center,
                    filler()}) |
              center;
     }
@@ -986,9 +988,8 @@ int main(int argc, char **argv) {
                       tr(Str::PromptNewPlaylist), "");
       } else if (adding) {
         bool ok = store.addTrack(plNames[ui.plSel], ui.pendingTrack);
-        ui.message =
-            ok ? trf(Str::MsgAddedTo, {plNames[ui.plSel]})
-               : std::string(tr(Str::ErrAddFailed));
+        ui.message = ok ? trf(Str::MsgAddedTo, {plNames[ui.plSel]})
+                        : std::string(tr(Str::ErrAddFailed));
         ui.popup = PopupMode::None;
       } else {
         std::vector<Track> tracks;
@@ -1135,7 +1136,8 @@ int main(int argc, char **argv) {
       const auto vis = browserVisible();
       if (inBrowser && ui.browserSel > 0 && ui.browserSel <= vis.size() &&
           es[vis[ui.browserSel - 1]].isDir)
-        for (const auto &p : browser.audioFilesIn(es[vis[ui.browserSel - 1]].path))
+        for (const auto &p :
+             browser.audioFilesIn(es[vis[ui.browserSel - 1]].path))
           player.enqueue(cachedTrack(p));
       break;
     }
@@ -1211,7 +1213,8 @@ int main(int argc, char **argv) {
       clearSearch();
       break;
     case Action::ToggleHelp:
-      ui.popup = ui.popup == PopupMode::Help ? PopupMode::None : PopupMode::Help;
+      ui.popup =
+          ui.popup == PopupMode::Help ? PopupMode::None : PopupMode::Help;
       break;
     case Action::ToggleLanguage:
       setLang(currentLang() == Lang::En ? Lang::Fr : Lang::En);
@@ -1511,8 +1514,8 @@ int main(int argc, char **argv) {
         int skipped = 0;
         if (player.takeLoadError(skipped)) {
           ui.message = skipped > 0
-              ? trf(Str::MsgSkipped, {std::to_string(skipped)})
-              : std::string(tr(Str::ErrNoPlayable));
+                           ? trf(Str::MsgSkipped, {std::to_string(skipped)})
+                           : std::string(tr(Str::ErrNoPlayable));
           ui.messageIsError = true;
         }
 

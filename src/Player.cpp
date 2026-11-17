@@ -1,4 +1,5 @@
 #include "Player.hpp"
+
 #include <algorithm>
 
 void Player::loadCurrent(bool start) {
@@ -92,7 +93,9 @@ void Player::pause() {
   engine_.pause();
   playing_ = false;
 }
-void Player::toggle() { playing_ ? pause() : play(); }
+void Player::toggle() {
+  playing_ ? pause() : play();
+}
 
 void Player::next() {
   if (queue_.next())

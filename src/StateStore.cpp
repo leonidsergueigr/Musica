@@ -25,11 +25,15 @@ std::string trim(std::string s) {
   return s;
 }
 
-bool toBool(const std::string &s) { return s == "1" || s == "true"; }
+bool toBool(const std::string &s) {
+  return s == "1" || s == "true";
+}
 
 } // namespace
 
-fs::path statePath() { return configHome() / "musica" / "state"; }
+fs::path statePath() {
+  return configHome() / "musica" / "state";
+}
 
 SavedState loadState() {
   SavedState state;
@@ -83,7 +87,7 @@ bool saveState(const SavedState &state) {
   if (!out)
     return false;
 
-  const char *repeat = state.repeat == 1 ? "all"
+  const char *repeat = state.repeat == 1   ? "all"
                        : state.repeat == 2 ? "one"
                                            : "off";
   out << "# Musica state\n"

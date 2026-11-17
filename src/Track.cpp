@@ -1,4 +1,5 @@
 #include "Track.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cctype>

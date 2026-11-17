@@ -1,4 +1,5 @@
 #include "Spectrum.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <complex>

@@ -1,5 +1,6 @@
 #pragma once
 #include "Track.hpp"
+
 #include <vector>
 
 enum class RepeatMode { Off, All, One };
