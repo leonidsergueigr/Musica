@@ -29,12 +29,18 @@ public:
   const Spectrum &spectrum() const { return spectrum_; }
   void tick();
 
+  // Signale une lecture impossible (toutes les pistes sautées). Le nombre de
+  // pistes ignorées est fourni et le drapeau remis à zéro.
+  bool takeLoadError(int &skipped);
+
 private:
   void loadCurrent(bool startPlaying);
   AudioEngine engine_;
   Queue queue_;
   float volume_ = 1.0f;
   bool playing_ = false;
+  bool loadError_ = false;
+  int skippedCount_ = 0;
   void updateSpectrum();
   Spectrum spectrum_;
 };

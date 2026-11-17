@@ -1354,6 +1354,14 @@ int main(int argc, char **argv) {
         std::lock_guard<std::mutex> lk(mtx);
         player.tick();
 
+        int skipped = 0;
+        if (player.takeLoadError(skipped)) {
+          ui.message = skipped > 0
+              ? trf(Str::MsgSkipped, {std::to_string(skipped)})
+              : std::string(tr(Str::ErrNoPlayable));
+          ui.messageIsError = true;
+        }
+
         const Track *track = player.currentTrack();
         const std::string key =
             track ? track->path.parent_path().string() + "|" + track->album

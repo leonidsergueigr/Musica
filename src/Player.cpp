@@ -2,16 +2,47 @@
 #include <algorithm>
 
 void Player::loadCurrent(bool start) {
-  const Track *t = queue_.current();
-  if (!t || !engine_.load(t->path.string())) {
+  const size_t total = queue_.tracks().size();
+  if (total == 0) {
     playing_ = false;
     return;
   }
-  engine_.setVolume(volume_);
-  if (start) {
-    engine_.play();
-    playing_ = true;
+
+  // Saute les pistes illisibles, sans jamais boucler indéfiniment (même avec
+  // la répétition d'une seule piste).
+  size_t skipped = 0;
+  for (size_t attempt = 0; attempt < total; ++attempt) {
+    const Track *t = queue_.current();
+    if (!t)
+      break;
+    if (engine_.load(t->path.string())) {
+      engine_.setVolume(volume_);
+      if (start) {
+        engine_.play();
+        playing_ = true;
+      }
+      if (skipped > 0) {
+        skippedCount_ += static_cast<int>(skipped);
+        loadError_ = true;
+      }
+      return;
+    }
+    ++skipped;
+    if (!queue_.next(true))
+      break;
   }
+
+  playing_ = false;
+  skippedCount_ += static_cast<int>(skipped);
+  loadError_ = true;
+}
+
+bool Player::takeLoadError(int &skipped) {
+  const bool had = loadError_;
+  skipped = skippedCount_;
+  loadError_ = false;
+  skippedCount_ = 0;
+  return had;
 }
 
 void Player::playQueueIndex(size_t i) {
