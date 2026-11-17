@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(Musica LANGUAGES C CXX)
+project(Musica VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -34,6 +34,7 @@ FetchContent_MakeAvailable(ftxui taglib)
 
 add_executable(musica
     src/main.cpp
+    src/I18n.cpp
     src/AudioEngine.cpp
     src/Track.cpp
     src/FileBrowser.cpp
@@ -54,6 +55,8 @@ target_include_directories(musica
         ${taglib_BINARY_DIR}
         ${taglib_BINARY_DIR}/taglib
 )
+
+target_compile_definitions(musica PRIVATE MUSICA_VERSION="${PROJECT_VERSION}")
 
 target_link_libraries(musica
     PRIVATE

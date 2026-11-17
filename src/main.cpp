@@ -1,4 +1,5 @@
 #include "FileBrowser.hpp"
+#include "I18n.hpp"
 #include "Player.hpp"
 #include "PlaylistStore.hpp"
 #include "Track.hpp"
@@ -19,6 +20,10 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+#ifndef MUSICA_VERSION
+#define MUSICA_VERSION "dev"
+#endif
 
 using namespace ftxui;
 
@@ -140,6 +145,7 @@ enum class Action {
   OpenPlaylists,
   AddToPlaylist,
   ToggleHelp,
+  ToggleLanguage,
 };
 
 static void moveSel(size_t &sel, int delta, size_t count) {
@@ -154,10 +160,38 @@ static void moveSel(size_t &sel, int delta, size_t count) {
 
 int main(int argc, char **argv) {
   bool noMouse = false;
+  bool showHelp = false;
+  bool showVersion = false;
+  Lang lang = detectLang();
+
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
-    if (arg == "--no-mouse")
+    if (arg == "--no-mouse") {
       noMouse = true;
+    } else if (arg == "--lang" && i + 1 < argc) {
+      lang = std::string(argv[++i]) == "fr" ? Lang::Fr : Lang::En;
+    } else if (arg.rfind("--lang=", 0) == 0) {
+      lang = arg.substr(7) == "fr" ? Lang::Fr : Lang::En;
+    } else if (arg == "--help" || arg == "-h") {
+      showHelp = true;
+    } else if (arg == "--version" || arg == "-v") {
+      showVersion = true;
+    }
+  }
+  setLang(lang);
+
+  if (showVersion) {
+    std::printf("musica %s\n", MUSICA_VERSION);
+    return 0;
+  }
+  if (showHelp) {
+    std::printf("%s %s\n\n%s\n\n%s\n", tr(Str::AppTitle), MUSICA_VERSION,
+                tr(Str::CliUsage), tr(Str::CliOptions));
+    std::printf("  --no-mouse     %s\n", tr(Str::CliNoMouse));
+    std::printf("  --lang fr|en   %s\n", tr(Str::CliLang));
+    std::printf("  --help         %s\n", tr(Str::CliHelp));
+    std::printf("  --version      %s\n", tr(Str::CliVersion));
+    return 0;
   }
 
   Player player;
@@ -228,7 +262,7 @@ int main(int argc, char **argv) {
     const int screenH = screen.dimy();
     const bool compact = screenW < 80 || screenH < 24;
 
-    std::string title = t ? t->title : "Rien en cours";
+    std::string title = t ? t->title : tr(Str::NowPlayingNone);
     std::string artist = (t && !t->artist.empty()) ? t->artist : "";
     std::string nowPlaying =
         std::string(player.isPlaying() ? "▶ " : "⏸ ") +
@@ -268,7 +302,8 @@ int main(int argc, char **argv) {
               text("⏯") | reflect(playBox), text("  "),
               text("⏭") | reflect(nextBox), text("   "),
               text(shuffleLabel) | reflect(shuffleBox), text("   "),
-              text(repeatLabel) | reflect(repeatBox), text("   vol "),
+              text(repeatLabel) | reflect(repeatBox),
+              text("   " + std::string(tr(Str::VolumeLabel)) + " "),
               volumeBar,
               text(" " + std::to_string(static_cast<int>(player.volume() * 100)) +
                    "%")}) |
@@ -311,18 +346,18 @@ int main(int argc, char **argv) {
   };
 
   auto renderQueue = [&] {
-    const auto &tr = player.queue().tracks();
-    ui.queueSel = tr.empty() ? 0 : std::min(ui.queueSel, tr.size() - 1);
+    const auto &tracks = player.queue().tracks();
+    ui.queueSel = tracks.empty() ? 0 : std::min(ui.queueSel, tracks.size() - 1);
     bool focused = ui.focus == Panel::Queue;
 
     Elements rows;
     int total = 0;
-    queueRowBoxes.assign(tr.size(), Box{});
-    for (size_t i = 0; i < tr.size(); ++i) {
-      total += tr[i].durationSec;
+    queueRowBoxes.assign(tracks.size(), Box{});
+    for (size_t i = 0; i < tracks.size(); ++i) {
+      total += tracks[i].durationSec;
       bool cur = player.currentTrack() && i == player.queue().currentIndex();
-      Element row = hbox({text(cur ? "▶ " : "  "), text(tr[i].title) | flex,
-                          text(" " + fmtTrackTime(tr[i].durationSec))}) |
+      Element row = hbox({text(cur ? "▶ " : "  "), text(tracks[i].title) | flex,
+                          text(" " + fmtTrackTime(tracks[i].durationSec))}) |
                     reflect(queueRowBoxes[i]);
       if (i == ui.queueSel)
         row = row | (focused ? inverted : bold) | focus;
@@ -330,11 +365,12 @@ int main(int argc, char **argv) {
     }
     rows.push_back(filler());
     auto box =
-        window(text(" File d'attente "),
+        window(text(" " + std::string(tr(Str::QueueTitle)) + " "),
                vbox({vbox(std::move(rows)) | vscroll_indicator | yframe | flex,
                      separator(),
-                     text(std::to_string(tr.size()) + " pistes · " +
-                          fmtTrackTime(total))})) |
+                     text(trf(Str::TracksCount,
+                              {std::to_string(tracks.size())}) +
+                          " · " + fmtTrackTime(total))})) |
         flex | reflect(queuePanelBox);
     return focused ? box | color(Color::Cyan) : box;
   };
@@ -376,38 +412,38 @@ int main(int argc, char **argv) {
     };
     auto compactSet = [&] {
       specs.clear();
-      act("␣", "Pause", cPlay, Action::TogglePlay);
-      act("n", "Suivant", cPlay, Action::Next);
-      act("⏎", "Jouer", cNav, Action::Activate);
-      act("?", "Aide", cPl, Action::ToggleHelp);
+      act("␣", tr(Str::Pause), cPlay, Action::TogglePlay);
+      act("n", tr(Str::Next), cPlay, Action::Next);
+      act("⏎", tr(Str::Play), cNav, Action::Activate);
+      act("?", tr(Str::HelpChip), cPl, Action::ToggleHelp);
     };
 
     if (ui.popup == PopupMode::NameInput) {
-      evt("⏎", "Valider", cPlay, Event::Return);
-      evt("esc", "Annuler", cNav, Event::Escape);
+      evt("⏎", tr(Str::Validate), cPlay, Event::Return);
+      evt("esc", tr(Str::Cancel), cNav, Event::Escape);
     } else if (ui.popup == PopupMode::Help) {
-      evt("esc", "Fermer l'aide", cNav, Event::Escape);
-      evt("?", "Fermer l'aide", cNav, Event::Character('?'));
+      evt("esc", tr(Str::CloseHelp), cNav, Event::Escape);
+      evt("?", tr(Str::CloseHelp), cNav, Event::Character('?'));
     } else if (ui.popup == PopupMode::Manage) {
-      evt("⏎", "Charger", cPlay, Event::Return);
-      evt("a", "+ file", cPl, Event::Character('a'));
-      evt("s", "Sauver la file", cPl, Event::Character('s'));
-      evt("r", "Renommer", cPl, Event::Character('r'));
-      evt("d", "Supprimer", cPl, Event::Character('d'));
-      evt("esc", "Fermer", cNav, Event::Escape);
+      evt("⏎", tr(Str::LoadChip), cPlay, Event::Return);
+      evt("a", tr(Str::AddFile), cPl, Event::Character('a'));
+      evt("s", tr(Str::SaveQueue), cPl, Event::Character('s'));
+      evt("r", tr(Str::Rename), cPl, Event::Character('r'));
+      evt("d", tr(Str::Delete), cPl, Event::Character('d'));
+      evt("esc", tr(Str::Close), cNav, Event::Escape);
     } else if (ui.popup == PopupMode::AddTrack) {
-      evt("⏎", "Ajouter ici", cPlay, Event::Return);
-      evt("esc", "Annuler", cNav, Event::Escape);
+      evt("⏎", tr(Str::AddHere), cPlay, Event::Return);
+      evt("esc", tr(Str::Cancel), cNav, Event::Escape);
     } else {
-      act("␣", "Pause", cPlay, Action::TogglePlay);
-      act("n", "Suivant", cPlay, Action::Next);
-      act("b", "Précédent", cPlay, Action::Previous);
-      act("←", "-5 s", cNav, Action::SeekBackward);
-      act("→", "+5 s", cNav, Action::SeekForward);
-      act("j/k", "Naviguer", cNav, Action::Down);
-      act("a", "+ fichier", cPl, Action::AddFile);
-      act("p", "Playlists", cPl, Action::OpenPlaylists);
-      act("?", "Aide", cPl, Action::ToggleHelp);
+      act("␣", tr(Str::Pause), cPlay, Action::TogglePlay);
+      act("n", tr(Str::Next), cPlay, Action::Next);
+      act("b", tr(Str::Previous), cPlay, Action::Previous);
+      act("←", tr(Str::SeekBack), cNav, Action::SeekBackward);
+      act("→", tr(Str::SeekFwd), cNav, Action::SeekForward);
+      act("j/k", tr(Str::Navigate), cNav, Action::Down);
+      act("a", tr(Str::AddFile), cPl, Action::AddFile);
+      act("p", tr(Str::PlaylistsChip), cPl, Action::OpenPlaylists);
+      act("?", tr(Str::HelpChip), cPl, Action::ToggleHelp);
 
       int total = 0;
       for (const auto &s : specs)
@@ -443,7 +479,8 @@ int main(int argc, char **argv) {
       msg = text(" " + ui.message) |
             color(ui.messageIsError ? Color::Red : Color::Green) | bold;
 
-    return window(text(" Commandes "), vbox({msg, hbox(std::move(row))}));
+    return window(text(" " + std::string(tr(Str::CommandsTitle)) + " "),
+                  vbox({msg, hbox(std::move(row))}));
   };
 
   auto renderPopup = [&]() -> Element {
@@ -453,34 +490,38 @@ int main(int argc, char **argv) {
                      text(" " + l)});
       };
       Element left = vbox({
-          text("Lecture") | bold | color(Color::Cyan),
-          key("␣", "pause / lecture"),
-          key("n / b", "suivant / précédent"),
-          key("← / →", "-5 s / +5 s"),
-          key("+ / -", "volume"),
-          key("s / r", "shuffle / répétition"),
+          text(tr(Str::HelpPlayback)) | bold | color(Color::Cyan),
+          key("␣", tr(Str::HkPause)),
+          key("n / b", tr(Str::HkNextPrev)),
+          key("← / →", tr(Str::HkSeek)),
+          key("+ / -", tr(Str::HkVolume)),
+          key("s / r", tr(Str::HkShuffleRepeat)),
           text(""),
-          text("Navigation") | bold | color(Color::Green),
-          key("j / k", "descendre / monter"),
-          key("h / l", "panneau gauche / droit"),
-          key("⏎", "jouer / entrer"),
-          key("a / A", "ajouter fichier / dossier"),
+          text(tr(Str::HelpNav)) | bold | color(Color::Green),
+          key("j / k", tr(Str::HkMove)),
+          key("h / l", tr(Str::HkPanels)),
+          key("⏎", tr(Str::HkEnter)),
+          key("a / A", tr(Str::HkAdd)),
+          key("/", tr(Str::HkSearch)),
+          key("L", tr(Str::LanguageChip)),
       });
       Element right = vbox({
-          text("Playlists") | bold | color(Color::Magenta),
-          key("p", "gérer les playlists"),
-          key("P", "ajouter le morceau"),
-          key("⏎ a s r d", "popup playlists"),
+          text(tr(Str::PlaylistsTitle)) | bold | color(Color::Magenta),
+          key("p", tr(Str::HkPlManage)),
+          key("P", tr(Str::HkPlAdd)),
+          key("⏎ a s r d", tr(Str::HkPlPopup)),
+          key("x J / K", tr(Str::HkPlEdit)),
+          key("i", tr(Str::HkInfo)),
           text(""),
-          text("Souris") | bold | color(Color::Yellow),
-          key("clic", "sélectionner / bouton"),
-          key("double-clic", "jouer / entrer"),
-          key("molette", "défiler / volume"),
-          key("glisser", "barres de position"),
+          text(tr(Str::HelpMouse)) | bold | color(Color::Yellow),
+          key("clic", tr(Str::HkClick)),
+          key("double-clic", tr(Str::HkDouble)),
+          key("molette", tr(Str::HkWheel)),
+          key("glisser", tr(Str::HkDrag)),
           text(""),
-          text("? / esc : fermer   q : quitter") | dim,
+          text(tr(Str::HkClose)) | dim,
       });
-      return window(text(" Aide "),
+      return window(text(" " + std::string(tr(Str::HelpTitle)) + " "),
                     hbox({left, text("   "), right})) |
              reflect(popupPanelBox);
     }
@@ -498,13 +539,15 @@ int main(int argc, char **argv) {
     popupRowBoxes.assign(plNames.size() + 1, Box{});
     for (size_t i = 0; i < plNames.size(); ++i) {
       Element row = hbox({text("  " + plNames[i]) | flex,
-                          text(std::to_string(plCounts[i]) + " pistes  ")}) |
+                          text(trf(Str::TracksCount,
+                                   {std::to_string(plCounts[i])}) +
+                               "  ")}) |
                     reflect(popupRowBoxes[i]);
       if (i == ui.plSel)
         row = row | inverted;
       rows.push_back(row);
     }
-    Element add = text("  + Nouvelle playlist…") |
+    Element add = text("  " + std::string(tr(Str::NewPlaylistItem))) |
                   reflect(popupRowBoxes[plNames.size()]);
     if (ui.plSel == plNames.size())
       add = add | inverted;
@@ -512,7 +555,9 @@ int main(int argc, char **argv) {
     rows.push_back(separator());
 
     bool adding = ui.popup == PopupMode::AddTrack;
-    return window(text(adding ? " Ajouter à une playlist " : " Playlists "),
+    return window(text(adding
+                            ? " " + std::string(tr(Str::AddToPlaylistTitle)) + " "
+                            : " " + std::string(tr(Str::PlaylistsTitle)) + " "),
                   vbox(std::move(rows))) |
            size(WIDTH, EQUAL, 70) | reflect(popupPanelBox);
   };
@@ -586,14 +631,18 @@ int main(int argc, char **argv) {
         }
         }
         if (!ok) {
-          ui.error = "Échec : nom vide, invalide ou déjà pris";
+          ui.error = tr(Str::ErrInvalidName);
           return true;
         }
         if (ui.nameAction == NameAction::CreateAndAdd) {
-          ui.message = "Ajouté à « " + name + " »";
+          ui.message = trf(Str::MsgAddedTo, {name});
           ui.popup = PopupMode::None;
         } else {
           refreshPlaylists();
+          if (ui.nameAction == NameAction::Rename)
+            ui.message = trf(Str::MsgRenamed, {name});
+          else if (ui.nameAction == NameAction::SaveQueue)
+            ui.message = trf(Str::MsgQueueSaved, {name});
           ui.popup = PopupMode::Manage;
         }
         return true;
@@ -649,11 +698,12 @@ int main(int argc, char **argv) {
     if (e == Event::Return) {
       if (onNew) {
         openNameInput(adding ? NameAction::CreateAndAdd : NameAction::Create,
-                      "Nouvelle playlist", "");
+                      tr(Str::PromptNewPlaylist), "");
       } else if (adding) {
         bool ok = store.addTrack(plNames[ui.plSel], ui.pendingTrack);
         ui.message =
-            ok ? "Ajouté à « " + plNames[ui.plSel] + " »" : "Échec de l'ajout";
+            ok ? trf(Str::MsgAddedTo, {plNames[ui.plSel]})
+               : std::string(tr(Str::ErrAddFailed));
         ui.popup = PopupMode::None;
       } else {
         std::vector<Track> tracks;
@@ -675,7 +725,7 @@ int main(int argc, char **argv) {
 
     // Sauver la file : disponible même sans playlist sélectionnée
     if (e == Event::Character('s')) {
-      openNameInput(NameAction::SaveQueue, "Sauver la file sous le nom",
+      openNameInput(NameAction::SaveQueue, tr(Str::PromptSaveQueue),
                     onNew ? "" : plNames[ui.plSel]);
       return true;
     }
@@ -688,11 +738,11 @@ int main(int argc, char **argv) {
       for (auto &p : store.load(name))
         if (std::filesystem::exists(p))
           player.enqueue(readTrack(p));
-      ui.message = "Playlist ajoutée à la file";
+      ui.message = tr(Str::MsgPlaylistQueued);
       ui.popup = PopupMode::None;
     } else if (e == Event::Character('r')) {
       ui.target = name;
-      openNameInput(NameAction::Rename, "Renommer", name);
+      openNameInput(NameAction::Rename, tr(Str::PromptRename), name);
     } else if (e == Event::Character('d')) {
       store.remove(name);
       refreshPlaylists();
@@ -814,6 +864,11 @@ int main(int argc, char **argv) {
       break;
     case Action::ToggleHelp:
       ui.popup = ui.popup == PopupMode::Help ? PopupMode::None : PopupMode::Help;
+      break;
+    case Action::ToggleLanguage:
+      setLang(currentLang() == Lang::En ? Lang::Fr : Lang::En);
+      ui.message =
+          currentLang() == Lang::Fr ? tr(Str::MsgLangFr) : tr(Str::MsgLangEn);
       break;
     }
   };
@@ -938,6 +993,10 @@ int main(int argc, char **argv) {
     // ---- Clavier ----
     if (e == Event::Character('?')) {
       perform(Action::ToggleHelp);
+      return true;
+    }
+    if (e == Event::Character('L')) {
+      perform(Action::ToggleLanguage);
       return true;
     }
     if (e == Event::Character('q')) {
