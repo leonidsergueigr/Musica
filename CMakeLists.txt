@@ -29,6 +29,7 @@ FetchContent_Declare(
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(FTXUI_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(ftxui taglib)
 
@@ -69,3 +70,6 @@ target_link_libraries(musica
         ${CMAKE_DL_LIBS}
         m
 )
+
+include(GNUInstallDirs)
+install(TARGETS musica RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
