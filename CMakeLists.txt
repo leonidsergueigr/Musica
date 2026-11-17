@@ -6,6 +6,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Build optimisé par défaut : un build Debug rend la FFT et le tap audio
+# suffisamment coûteux pour provoquer des micro-coupures (grincements).
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Type de build" FORCE)
+endif()
+
 include(FetchContent)
 find_package(Threads REQUIRED)
 
@@ -34,6 +40,7 @@ add_executable(musica
     src/Queue.cpp
     src/PlaylistStore.cpp
     src/Player.cpp
+    src/Spectrum.cpp
     external/miniaudio/miniaudio.c
 )
 
