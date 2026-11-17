@@ -32,6 +32,8 @@ add_executable(musica
     src/Track.cpp
     src/FileBrowser.cpp
     src/Queue.cpp
+    src/PlaylistStore.cpp
+    src/Player.cpp
     external/miniaudio/miniaudio.c
 )
 
