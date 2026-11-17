@@ -4,7 +4,7 @@
 #include <string>
 
 enum class Panel { Browser, Queue };
-enum class PopupMode { None, Manage, AddTrack, NameInput, Help };
+enum class PopupMode { None, Manage, AddTrack, NameInput, Help, ConfirmDelete };
 enum class NameAction { Create, CreateAndAdd, Rename, SaveQueue };
 
 struct UiState {

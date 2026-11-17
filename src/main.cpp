@@ -591,6 +591,9 @@ int main(int argc, char **argv) {
     if (ui.popup == PopupMode::NameInput) {
       evt("⏎", tr(Str::Validate), cPlay, Event::Return);
       evt("esc", tr(Str::Cancel), cNav, Event::Escape);
+    } else if (ui.popup == PopupMode::ConfirmDelete) {
+      evt("y", tr(Str::Delete), cPl, Event::Character('y'));
+      evt("n", tr(Str::Cancel), cNav, Event::Character('n'));
     } else if (ui.popup == PopupMode::Help) {
       evt("esc", tr(Str::CloseHelp), cNav, Event::Escape);
       evt("?", tr(Str::CloseHelp), cNav, Event::Character('?'));
@@ -707,6 +710,14 @@ int main(int argc, char **argv) {
              reflect(popupPanelBox);
     }
 
+    if (ui.popup == PopupMode::ConfirmDelete) {
+      return window(
+                 text(" " + std::string(tr(Str::ConfirmTitle)) + " "),
+                 vbox({text(trf(Str::ConfirmDelete, {ui.target})),
+                       text(std::string("  ") + tr(Str::YesNo)) | dim})) |
+             size(WIDTH, EQUAL, 40) | reflect(popupPanelBox);
+    }
+
     if (ui.popup == PopupMode::NameInput) {
       Elements rows = {hbox({text("> "), text(ui.input), text("█") | blink}),
                        separator()};
@@ -760,6 +771,20 @@ int main(int argc, char **argv) {
       if (e == Event::Escape || e == Event::Character('?') ||
           e == Event::Character('q'))
         ui.popup = PopupMode::None;
+      return true;
+    }
+
+    if (ui.popup == PopupMode::ConfirmDelete) {
+      if (e == Event::Character('y') || e == Event::Character('o')) {
+        store.remove(ui.target);
+        refreshPlaylists();
+        ui.message = trf(Str::MsgRemoved, {ui.target});
+        ui.messageIsError = false;
+        ui.popup = PopupMode::None;
+      } else if (e == Event::Escape || e == Event::Character('n') ||
+                 e == Event::Character('q')) {
+        ui.popup = PopupMode::None;
+      }
       return true;
     }
 
@@ -926,8 +951,8 @@ int main(int argc, char **argv) {
       ui.target = name;
       openNameInput(NameAction::Rename, tr(Str::PromptRename), name);
     } else if (e == Event::Character('d')) {
-      store.remove(name);
-      refreshPlaylists();
+      ui.target = name;
+      ui.popup = PopupMode::ConfirmDelete;
     }
     return true;
   };
