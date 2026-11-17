@@ -52,7 +52,6 @@ static std::string rep(const std::string &s, int n) {
   return out;
 }
 
-// Barre de progression textuelle : ━ plein, ● curseur, ─ reste.
 static std::string barString(float frac, int width, bool asciiCursor = false) {
   if (width <= 0)
     return {};
@@ -70,9 +69,8 @@ static std::string barString(float frac, int width, bool asciiCursor = false) {
   return out;
 }
 
-// Spectre multi-lignes. `rows` lignes de haut, chaque barre fait `barWidth`
-// cellules. La ligne supérieure de chaque barre utilise les huit niveaux
-// ▁▂▃▄▅▆▇█ pour la finesse.
+// Multi-row spectrum: the top cell of each bar uses the eight ▁▂▃▄▅▆▇█ levels
+// for sub-cell precision.
 static Element renderSpectrumElement(
     const std::array<float, Spectrum::kBands> &bands, int barCount, int rows,
     int barWidth, bool gap) {
@@ -127,7 +125,7 @@ static void replaceAll(std::string &s, const std::string &from,
   }
 }
 
-// Repli casse + accents pour une recherche tolérante.
+// Case- and accent-insensitive folding for search.
 static std::string foldText(const std::string &in) {
   std::string s = in;
   for (char &c : s)
@@ -155,7 +153,7 @@ static bool containsFold(const std::string &hay, const std::string &needle) {
   return foldText(hay).find(foldText(needle)) != std::string::npos;
 }
 
-// Rendu en demi-blocs : une cellule porte deux pixels verticaux.
+// Half-block rendering: one terminal cell holds two vertical pixels.
 static Element renderCover(const CoverArt &art, int cellsW, int cellsH) {
   if (art.w <= 0 || art.h <= 0 ||
       art.rgb.size() < static_cast<size_t>(art.w) * art.h * 3)
@@ -195,8 +193,8 @@ static float fracInBox(const Box &b, int x) {
                     0.0f, 1.0f);
 }
 
-// Toutes les actions déclenchables au clavier comme à la souris passent par
-// ce point unique afin de ne pas dupliquer la logique.
+// Keyboard and mouse both dispatch through this single point so the logic is
+// not duplicated.
 enum class Action {
   Quit,
   TogglePlay,
@@ -261,7 +259,7 @@ int main(int argc, char **argv) {
       showVersion = true;
     }
   }
-  // L'état sauvegardé ne s'applique que si --lang n'est pas explicite.
+  // The saved language only applies when --lang was not given explicitly.
   const SavedState saved = loadState();
   if (!langGiven && (saved.lang == "fr" || saved.lang == "en"))
     lang = saved.lang == "fr" ? Lang::Fr : Lang::En;
@@ -293,7 +291,7 @@ int main(int argc, char **argv) {
   FileBrowser browser(startDir);
   PlaylistStore store;
   UiState ui;
-  std::mutex mtx; // protège player + browser + store + ui
+  std::mutex mtx; // guards player + browser + store + ui
 
   player.setVolume(saved.volume);
   player.queue().setShuffle(saved.shuffle);
@@ -302,7 +300,6 @@ int main(int argc, char **argv) {
   std::vector<std::string> plNames;
   std::vector<size_t> plCounts;
 
-  // Zones cliquables mémorisées pendant le rendu (coordonnées écran).
   Box progressBox, volumeBox;
   Box prevBox, playBox, nextBox, shuffleBox, repeatBox;
   Box browserPanelBox, queuePanelBox;
@@ -313,9 +310,9 @@ int main(int argc, char **argv) {
   bool dragVolume = false;
   std::function<void(Action)> performFn;
 
-  // Pochette : chargée hors des verrous principaux par un thread dédié, mise
-  // en cache par album/dossier. Toutes ces variables sont protégées par
-  // coverMutex uniquement (ordre autorisé : mtx puis coverMutex).
+  // Covers are loaded off the main locks by a dedicated thread and cached by
+  // album/directory. These variables are guarded by coverMutex only; the lock
+  // order is mtx, then coverMutex.
   std::mutex coverMutex;
   std::unordered_map<std::string, std::shared_ptr<const CoverArt>> coverCache;
   std::shared_ptr<const CoverArt> currentCover;
@@ -330,7 +327,7 @@ int main(int argc, char **argv) {
   std::vector<std::pair<Box, Event>> popupChipBoxes;
   std::function<bool(Event)> handlePopup;
 
-  // Détection du double-clic (même ligne, < 400 ms).
+  // Double-click: same row within 400 ms.
   Panel lastClickPanel = Panel::Browser;
   long lastClickRow = -1;
   std::chrono::steady_clock::time_point lastClick;
@@ -338,7 +335,7 @@ int main(int argc, char **argv) {
   auto screen = ScreenInteractive::Fullscreen();
   screen.TrackMouse(!noMouse);
 
-  // Cache de tags : évite de relire tout un dossier à chaque lecture.
+  // Tag cache: avoids re-reading a whole directory on every play.
   struct CachedTrack {
     Track track;
     std::filesystem::file_time_type mtime;
@@ -360,13 +357,13 @@ int main(int argc, char **argv) {
     return track;
   };
 
-  // ---------- Helpers playlists ----------
   auto refreshPlaylists = [&] {
     plNames = store.list();
     plCounts.clear();
     for (auto &n : plNames)
       plCounts.push_back(store.load(n).size());
-    ui.plSel = std::min(ui.plSel, plNames.size()); // size() = ligne "Nouvelle"
+    // One extra row for "New playlist".
+    ui.plSel = std::min(ui.plSel, plNames.size());
   };
 
   auto openNameInput = [&](NameAction a, std::string prompt,
@@ -378,7 +375,6 @@ int main(int argc, char **argv) {
     ui.error.clear();
   };
 
-  // ---------- Recherche (panneau actif) ----------
   auto clearSearch = [&] {
     ui.searching = false;
     ui.query.clear();
@@ -408,7 +404,6 @@ int main(int argc, char **argv) {
     return out;
   };
 
-  // Puces de la barre de commandes : touche encadrée + libellé.
   auto chipElement = [](const std::string &key, const std::string &label,
                         const Color &c) {
     return hbox({text(" " + key + " ") | bgcolor(c) | color(Color::Black) |
@@ -416,7 +411,6 @@ int main(int argc, char **argv) {
                  text(" " + label)});
   };
 
-  // ---------- Rendu ----------
   auto renderBar = [&] {
     const Track *t = player.currentTrack();
     const float pos = player.position();
@@ -437,18 +431,16 @@ int main(int argc, char **argv) {
         player.queue().repeat() == RepeatMode::Off
             ? "↻ off"
             : (player.queue().repeat() == RepeatMode::All ? "↻ all" : "↻ one");
-    // Pochette : masquée sur les terminaux étroits, avec placeholder stable.
     const bool showCover = !compact && screenW >= 100;
     constexpr int coverW = 12;
     constexpr int coverH = 6;
     const int logoW = compact ? 0 : 16;
     const int leftW = logoW + (showCover ? coverW + 1 : 0);
 
-    // Spectre : nombre de barres adapté à la largeur disponible.
     const int rightW = std::max(20, screenW - leftW - 4);
     const int rows = compact ? 1 : 5;
     const int barWidth = compact ? 1 : 3;
-    const int step = barWidth + 1; // 3 cellules + 1 espace
+    const int step = barWidth + 1;
     const int maxBars = compact ? std::max(8, rightW) : rightW / step;
     const int barCount = std::clamp(maxBars, compact ? 8 : 12, 32);
 
@@ -747,10 +739,10 @@ int main(int argc, char **argv) {
           key("i", tr(Str::HkInfo)),
           text(""),
           text(tr(Str::HelpMouse)) | bold | color(Color::Yellow),
-          key("clic", tr(Str::HkClick)),
-          key("double-clic", tr(Str::HkDouble)),
-          key("molette", tr(Str::HkWheel)),
-          key("glisser", tr(Str::HkDrag)),
+          key(tr(Str::HkClickLabel), tr(Str::HkClick)),
+          key(tr(Str::HkDoubleLabel), tr(Str::HkDouble)),
+          key(tr(Str::HkWheelLabel), tr(Str::HkWheel)),
+          key(tr(Str::HkDragLabel), tr(Str::HkDrag)),
           text(""),
           text(tr(Str::HkClose)) | dim,
       });
@@ -836,7 +828,6 @@ int main(int argc, char **argv) {
 
   auto root = Renderer([&]() -> Element {
     std::lock_guard<std::mutex> lk(mtx);
-    // Terminal trop petit : un message clair plutôt qu'une mise en page cassée.
     if (screen.dimx() < 40 || screen.dimy() < 12) {
       return vbox({filler(),
                    text(tr(Str::TerminalTooSmall)) | bold | center,
@@ -851,7 +842,6 @@ int main(int argc, char **argv) {
     return dbox({base, renderPopup() | clear_under | center});
   });
 
-  // ---------- Handler du popup ----------
   handlePopup = [&](Event e) -> bool {
     if (ui.popup == PopupMode::Help) {
       if (e == Event::Escape || e == Event::Character('?') ||
@@ -881,7 +871,6 @@ int main(int argc, char **argv) {
       return true;
     }
 
-    // ---- puces cliquables du popup ----
     if (e.is_mouse()) {
       const Mouse m = e.mouse();
       if (m.motion == Mouse::Pressed && m.button == Mouse::Left) {
@@ -891,17 +880,15 @@ int main(int argc, char **argv) {
       }
     }
 
-    // ---- saisie d'un nom ----
     if (ui.popup == PopupMode::NameInput) {
       if (e == Event::Escape) {
-        // Retour au popup précédent selon l'action
         ui.popup = (ui.nameAction == NameAction::CreateAndAdd)
                        ? PopupMode::AddTrack
                        : PopupMode::Manage;
         return true;
       }
       if (e == Event::Backspace) {
-        // Supprime un caractère UTF-8 complet
+        // Remove a whole UTF-8 character, not a single byte.
         while (!ui.input.empty() && (ui.input.back() & 0xC0) == 0x80)
           ui.input.pop_back();
         if (!ui.input.empty())
@@ -949,15 +936,14 @@ int main(int argc, char **argv) {
       }
       if (e.is_character() && ui.input.size() < 40 && e.character() != "/")
         ui.input += e.character();
-      return true; // le popup capture tout
+      return true;
     }
 
-    // ---- souris dans le popup ----
     if (e.is_mouse()) {
       const Mouse m = e.mouse();
       if (m.motion == Mouse::Pressed && m.button == Mouse::Left) {
         if (!inBox(popupPanelBox, m.x, m.y)) {
-          ui.popup = PopupMode::None; // clic hors du popup : on ferme
+          ui.popup = PopupMode::None;
           return true;
         }
         for (size_t i = 0; i < popupRowBoxes.size(); ++i) {
@@ -977,7 +963,6 @@ int main(int argc, char **argv) {
       return true;
     }
 
-    // ---- liste des playlists (Manage / AddTrack) ----
     size_t rowCount = plNames.size() + 1;
     if (e == Event::Escape) {
       ui.popup = PopupMode::None;
@@ -1021,9 +1006,8 @@ int main(int argc, char **argv) {
     }
 
     if (adding)
-      return true; // en mode ajout, seules les touches ci-dessus comptent
+      return true;
 
-    // Sauver la file : disponible même sans playlist sélectionnée
     if (e == Event::Character('s')) {
       openNameInput(NameAction::SaveQueue, tr(Str::PromptSaveQueue),
                     onNew ? "" : plNames[ui.plSel]);
@@ -1031,7 +1015,7 @@ int main(int argc, char **argv) {
     }
 
     if (onNew)
-      return true; // les touches ci-dessous visent une playlist existante
+      return true;
 
     const std::string name = plNames[ui.plSel];
     if (e == Event::Character('a')) {
@@ -1050,7 +1034,6 @@ int main(int argc, char **argv) {
     return true;
   };
 
-  // ---------- Actions ----------
   auto quit = screen.ExitLoopClosure();
 
   auto perform = [&](Action a) {
@@ -1125,7 +1108,6 @@ int main(int argc, char **argv) {
           ui.browserSel = 0;
           clearSearch();
         } else {
-          // Joue ce fichier, et met tous les fichiers du dossier dans la file
           std::vector<Track> tracks;
           size_t start = 0;
           for (const auto &x : es) {
@@ -1266,7 +1248,6 @@ int main(int argc, char **argv) {
     if (ui.popup != PopupMode::None)
       return handlePopup(e);
 
-    // ---- Souris ----
     if (e.is_mouse()) {
       const Mouse m = e.mouse();
       if (m.motion == Mouse::Released) {
@@ -1356,7 +1337,6 @@ int main(int argc, char **argv) {
       return false;
     }
 
-    // ---- Saisie de la recherche ----
     if (ui.searching) {
       if (e == Event::Escape) {
         perform(Action::ClearSearch);
@@ -1378,7 +1358,7 @@ int main(int argc, char **argv) {
           ui.query += e.character();
         return true;
       }
-      return true; // la saisie capture les autres touches
+      return true;
     }
     if (e == Event::Escape && !ui.query.empty()) {
       perform(Action::ClearSearch);
@@ -1389,7 +1369,6 @@ int main(int argc, char **argv) {
       return true;
     }
 
-    // ---- Clavier ----
     if (e == Event::Character('?')) {
       perform(Action::ToggleHelp);
       return true;
@@ -1493,7 +1472,6 @@ int main(int argc, char **argv) {
     return false;
   });
 
-  // ---------- Thread de chargement des pochettes ----------
   std::thread coverThread([&] {
     std::unique_lock<std::mutex> lk(coverMutex);
     while (true) {
@@ -1507,22 +1485,21 @@ int main(int argc, char **argv) {
       std::shared_ptr<const CoverArt> art;
       const auto it = coverCache.find(key);
       if (it != coverCache.end()) {
-        art = it->second; // déjà chargée (ou absence déjà mémorisée)
+        art = it->second;
       } else {
-        lk.unlock(); // décodage sans aucun verrou
+        lk.unlock(); // decoding happens without holding the lock
         auto loaded = loadCover(path);
         lk.lock();
         if (loaded)
           art = std::make_shared<const CoverArt>(std::move(*loaded));
         coverCache[key] = art;
       }
-      // Ignore un résultat devenu obsolète pendant le décodage.
+      // Drop a result that became stale while decoding.
       if (key == requestedCoverKey)
         currentCover = art;
     }
   });
 
-  // ---------- Thread de rafraîchissement ----------
   std::atomic<bool> running{true};
   std::thread ticker([&] {
     while (running) {
@@ -1560,7 +1537,7 @@ int main(int argc, char **argv) {
         if (notify)
           coverCv.notify_one();
       }
-      screen.PostEvent(Event::Custom); // force un redessin
+      screen.PostEvent(Event::Custom);
     }
   });
 

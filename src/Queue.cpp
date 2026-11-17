@@ -94,8 +94,8 @@ bool Queue::move(size_t trackIndex, int delta) {
   if (target == trackIndex)
     return true;
 
-  // Les identifiants de order_ désignent des emplacements : on échange le
-  // contenu de deux emplacements et on suit la piste en cours de lecture.
+  // order_ stores track indices: swap the two slots and keep pos_ on the
+  // playing track.
   const size_t cur = order_.empty() ? 0 : order_[pos_];
   std::swap(tracks_[trackIndex], tracks_[target]);
   size_t curId = cur;

@@ -3,9 +3,8 @@
 #include <filesystem>
 #include <string>
 
-// État persistant de l'application (dernier dossier, volume, mode de lecture,
-// langue). Un fichier absent ou corrompu donne simplement les valeurs par
-// défaut.
+// Persistent application state (last directory, volume, playback modes,
+// language). A missing or malformed file falls back to the defaults.
 struct SavedState {
   std::string lastDir;
   float volume = 1.0f;
@@ -14,7 +13,7 @@ struct SavedState {
   std::string lang;
 };
 
-// ~/.config/musica/state (ou $XDG_CONFIG_HOME/musica/state).
+// ~/.config/musica/state, or $XDG_CONFIG_HOME/musica/state.
 std::filesystem::path statePath();
 SavedState loadState();
 bool saveState(const SavedState &state);

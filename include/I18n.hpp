@@ -3,11 +3,11 @@
 #include <initializer_list>
 #include <string>
 
-// Interface uniquement : le core ne dépend pas de ce module.
+// UI only: the core does not depend on this module.
 enum class Lang { En, Fr };
 
-// Table des chaînes : (clé, anglais, français). Une seule liste pour éviter
-// toute désynchronisation entre l'enum et les tables.
+// String table: (key, English, French). A single list keeps the enum and the
+// two language tables in sync.
 #define MUSICA_STRINGS(X)                                                     \
   X(AppTitle, "Musica", "Musica")                                             \
   X(QueueTitle, "Queue", "File d'attente")                                    \
@@ -94,9 +94,13 @@ enum class Lang { En, Fr };
   X(HkPlEdit, "remove / move track", "retirer / déplacer")                    \
   X(HkInfo, "track info", "infos de la piste")                                \
   X(HkClick, "select / button", "sélectionner / bouton")                      \
+  X(HkClickLabel, "click", "clic")                                           \
   X(HkDouble, "play / enter", "jouer / entrer")                               \
+  X(HkDoubleLabel, "double-click", "double-clic")                            \
   X(HkWheel, "scroll / volume", "défiler / volume")                           \
+  X(HkWheelLabel, "wheel", "molette")                                         \
   X(HkDrag, "seek / volume bars", "barres de position")                       \
+  X(HkDragLabel, "drag", "glisser")                                           \
   X(HkClose, "? / esc: close   q: quit", "? / esc : fermer   q : quitter")    \
   X(InfoTitleTag, "Title", "Titre")                                           \
   X(InfoArtist, "Artist", "Artiste")                                          \
@@ -124,12 +128,11 @@ enum class Str {
       Count
 };
 
-// Langue active.
 void setLang(Lang l);
 Lang currentLang();
-Lang detectLang(); // LC_ALL, LC_MESSAGES, LANG (préfixe "fr")
+Lang detectLang(); // LC_ALL, LC_MESSAGES, LANG ("fr" prefix)
 
 const char *tr(Str s);
 
-// Remplace les jetons {0}, {1}, … par les arguments fournis.
+// Substitutes the {0}, {1}, ... tokens with the given arguments.
 std::string trf(Str s, std::initializer_list<std::string> args);

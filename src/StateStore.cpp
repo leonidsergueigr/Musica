@@ -53,7 +53,7 @@ SavedState loadState() {
       try {
         state.volume = std::clamp(std::stof(value), 0.0f, 1.0f);
       } catch (...) {
-        // valeur invalide : on garde la valeur par défaut
+        // Keep the default on a malformed value.
       }
     } else if (key == "shuffle") {
       state.shuffle = toBool(value);

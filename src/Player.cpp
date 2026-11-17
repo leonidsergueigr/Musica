@@ -8,8 +8,8 @@ void Player::loadCurrent(bool start) {
     return;
   }
 
-  // Saute les pistes illisibles, sans jamais boucler indéfiniment (même avec
-  // la répétition d'une seule piste).
+  // Skip unreadable tracks without ever looping forever, including with
+  // single-track repeat.
   size_t skipped = 0;
   for (size_t attempt = 0; attempt < total; ++attempt) {
     const Track *t = queue_.current();
@@ -82,11 +82,6 @@ void Player::enqueue(const Track &t) {
   queue_.add(t);
   if (wasEmpty)
     loadCurrent(false);
-}
-
-void Player::enqueueAll(const std::vector<std::filesystem::path> &paths) {
-  for (auto &p : paths)
-    enqueue(readTrack(p));
 }
 
 void Player::play() {

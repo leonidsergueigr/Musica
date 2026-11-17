@@ -5,7 +5,7 @@
 
 class Spectrum {
 public:
-  static constexpr size_t kFft = 1024; // doit être une puissance de 2
+  static constexpr size_t kFft = 1024; // must be a power of two
   static constexpr size_t kBands = 32;
 
   Spectrum();

@@ -48,6 +48,10 @@ add_executable(musica
     external/miniaudio/miniaudio.c
 )
 
+target_compile_options(musica PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra>
+)
+
 target_include_directories(musica
     PRIVATE
         include

@@ -13,7 +13,6 @@ public:
   void moveQueueIndex(size_t i, int delta);
   void clear();
   void enqueue(const Track &t);
-  void enqueueAll(const std::vector<std::filesystem::path> &paths); // A
 
   void play();
   void pause();
@@ -32,8 +31,8 @@ public:
   const Spectrum &spectrum() const { return spectrum_; }
   void tick();
 
-  // Signale une lecture impossible (toutes les pistes sautées). Le nombre de
-  // pistes ignorées est fourni et le drapeau remis à zéro.
+  // Reports that playback failed because every candidate track was skipped.
+  // Returns the number of skipped tracks through `skipped` and clears the flag.
   bool takeLoadError(int &skipped);
 
 private:

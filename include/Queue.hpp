@@ -16,8 +16,8 @@ public:
   bool next(bool autoAdvance = false);
   bool previous();
   bool jumpTo(size_t trackIndex);
-  // Retire / déplace une piste (index dans tracks_), en gardant la piste en
-  // cours de lecture identique et l'ordre de shuffle cohérent.
+  // Indices refer to tracks_. Both operations keep the playing track and the
+  // shuffle order consistent.
   bool remove(size_t trackIndex);
   bool move(size_t trackIndex, int delta);
 

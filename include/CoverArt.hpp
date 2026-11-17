@@ -5,14 +5,14 @@
 #include <optional>
 #include <vector>
 
-// Pochette décodée en RGB, réduite à une petite taille (≤ 64 px de côté).
-// Ce module ne dépend pas de l'UI.
+// Decoded RGB cover, downscaled to at most 64 px per side. Independent of the
+// UI.
 struct CoverArt {
   int w = 0;
   int h = 0;
   std::vector<uint8_t> rgb; // w * h * 3
 };
 
-// Cherche une pochette intégrée (TagLib) puis un fichier cover/folder/front/
-// album (.jpg, .jpeg, .png) dans le dossier de la piste, et la décode.
+// Uses the picture embedded in the tags first, then a cover/folder/front/album
+// image (.jpg, .jpeg, .png) next to the track.
 std::optional<CoverArt> loadCover(const std::filesystem::path &track);

@@ -34,7 +34,7 @@ std::vector<uint8_t> embeddedPicture(const fs::path &track) {
     return {};
 
   const auto props = ref.file()->complexProperties("PICTURE");
-  // Priorité à la face avant, sinon la première image disponible.
+  // Prefer the front cover, then fall back to the first picture.
   for (const auto &prop : props) {
     if (prop.value("pictureType").value<TagLib::String>() == "Front Cover") {
       const TagLib::ByteVector data =
@@ -71,7 +71,6 @@ int stemRank(const std::string &stem) {
   return -1;
 }
 
-// Comparaison insensible à la casse sur le nom et l'extension.
 std::vector<uint8_t> folderPicture(const fs::path &track) {
   std::error_code ec;
   fs::path best;
@@ -91,7 +90,6 @@ std::vector<uint8_t> folderPicture(const fs::path &track) {
   return best.empty() ? std::vector<uint8_t>{} : readFile(best);
 }
 
-// Réduction par échantillonnage (suffisant pour 12×6 cellules).
 CoverArt downscale(const uint8_t *pixels, int w, int h) {
   const double scale =
       std::min(1.0, static_cast<double>(kMaxSide) / std::max(w, h));

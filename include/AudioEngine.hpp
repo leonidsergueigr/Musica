@@ -15,12 +15,12 @@ struct TapNode {
 
 class AudioEngine {
 private:
-  ma_engine engine;
-  ma_sound sound;
+  ma_engine engine_;
+  ma_sound sound_;
   TapNode tap_;
-  bool engineInitialized = false;
+  bool engineInitialized_ = false;
   bool tapInitialized_ = false;
-  bool isLoaded = false;
+  bool isLoaded_ = false;
   float volume_ = 1.0f;
   void unload();
   void initTap();
@@ -39,9 +39,7 @@ public:
   bool isFinish();
   void setVolume(float volume);
   float getVolume() const { return volume_; }
-  bool isInitialized() const { return engineInitialized; }
-  bool loaded() const { return isLoaded; }
-  void setLoop(bool enable);
+  bool isInitialized() const { return engineInitialized_; }
   float getCurrentPosition();
 
   void getRecentSamples(float *out, size_t n) const;
