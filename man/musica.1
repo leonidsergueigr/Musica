@@ -1,0 +1,100 @@
+.TH MUSICA 1 "November 2026" "musica 0.1.0" "User Commands"
+.SH NAME
+musica \- terminal music player with album art and a live spectrum
+.SH SYNOPSIS
+.B musica
+.RB [ \-\-no\-mouse ]
+.RB [ \-\-lang " fr|en" ]
+.SH DESCRIPTION
+.B musica
+is a terminal music player. It shows a folder browser and a play queue side by
+side, with album art read from tags or from a nearby cover file, and a
+multi-line real-time spectrum analyser.
+.PP
+Playback starts when a file is selected in the browser. The queue can be
+edited, saved as an M3U playlist and restored later. The last folder, volume,
+shuffle and repeat modes, and interface language are remembered.
+.SH OPTIONS
+.TP
+.B \-\-no\-mouse
+Disable mouse tracking so terminal text selection works as usual.
+.TP
+.BI \-\-lang " fr|en"
+Set the interface language. This overrides the saved language.
+.TP
+.B \-\-help ", " \-h
+Print usage and options.
+.TP
+.B \-\-version ", " \-v
+Print the version.
+.SH KEYS
+.TP
+.B space
+Play or pause.
+.TP
+.B n " / " b
+Next or previous track.
+.TP
+.B left " / " right
+Seek 5 seconds backward or forward.
+.TP
+.B + " / " \-
+Increase or decrease the volume.
+.TP
+.B s " / " r
+Toggle shuffle or repeat.
+.TP
+.B j " / " k
+Move the selection down or up.
+.TP
+.B h " / " l
+Focus the browser or the queue.
+.TP
+.B enter
+Play the selection, open a folder, or load a playlist.
+.TP
+.B a " / " A
+Add a file or a folder to the queue.
+.TP
+.B /
+Search the active panel. Escape clears the search.
+.TP
+.B i
+Show track information.
+.TP
+.B x
+Remove the selected queue track.
+.TP
+.B J " / " K
+Move the selected queue track down or up.
+.TP
+.B p " / " P
+Manage playlists or add the current track to a playlist.
+.TP
+.B ?
+Show the keyboard and mouse help.
+.TP
+.B L
+Switch the interface language.
+.TP
+.B q
+Quit.
+.PP
+With the mouse, click to select, double-click to play, use the wheel to
+scroll, drag the progress and volume bars, and click command buttons.
+.SH FILES
+.TP
+.I $XDG_CONFIG_HOME/musica/state
+Last folder, volume, shuffle and repeat modes, and interface language. When
+.B XDG_CONFIG_HOME
+is unset,
+.I ~/.config/musica/state
+is used.
+.TP
+.I $XDG_CONFIG_HOME/musica/playlists/
+M3U playlists managed from the interface.
+.SH SEE ALSO
+The project documentation in
+.I share/doc/musica/README.md
+and
+.IR share/doc/musica/README.fr.md .

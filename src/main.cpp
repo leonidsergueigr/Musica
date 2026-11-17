@@ -6,6 +6,7 @@
 #include "StateStore.hpp"
 #include "Track.hpp"
 #include "UiState.hpp"
+#include "version.hpp"
 
 #include <algorithm>
 #include <array>
@@ -27,10 +28,6 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
-
-#ifndef MUSICA_VERSION
-#define MUSICA_VERSION "dev"
-#endif
 
 using namespace ftxui;
 

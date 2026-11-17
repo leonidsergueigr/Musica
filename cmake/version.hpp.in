@@ -1,0 +1,3 @@
+#pragma once
+
+#define MUSICA_VERSION "@PROJECT_VERSION@"
