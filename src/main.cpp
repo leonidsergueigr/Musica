@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -110,6 +111,45 @@ static Element renderSpectrumElement(
   return hbox(std::move(cols));
 }
 
+static void replaceAll(std::string &s, const std::string &from,
+                       const std::string &to) {
+  if (from.empty())
+    return;
+  size_t pos = 0;
+  while ((pos = s.find(from, pos)) != std::string::npos) {
+    s.replace(pos, from.size(), to);
+    pos += to.size();
+  }
+}
+
+// Repli casse + accents pour une recherche tolérante.
+static std::string foldText(const std::string &in) {
+  std::string s = in;
+  for (char &c : s)
+    if (static_cast<unsigned char>(c) < 0x80)
+      c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  static const char *pairs[][2] = {
+      {"à", "a"}, {"á", "a"}, {"â", "a"}, {"ä", "a"}, {"ã", "a"},
+      {"å", "a"}, {"À", "a"}, {"Á", "a"}, {"Â", "a"}, {"Ä", "a"},
+      {"é", "e"}, {"è", "e"}, {"ê", "e"}, {"ë", "e"}, {"É", "e"},
+      {"È", "e"}, {"Ê", "e"}, {"Ë", "e"}, {"î", "i"}, {"ï", "i"},
+      {"í", "i"}, {"Î", "i"}, {"Ï", "i"}, {"ô", "o"}, {"ö", "o"},
+      {"ó", "o"}, {"õ", "o"}, {"Ô", "o"}, {"Ö", "o"}, {"û", "u"},
+      {"ù", "u"}, {"ü", "u"}, {"ú", "u"}, {"Û", "u"}, {"Ù", "u"},
+      {"Ü", "u"}, {"ç", "c"}, {"Ç", "c"}, {"ñ", "n"}, {"Ñ", "n"},
+      {"œ", "oe"}, {"Œ", "oe"}, {"æ", "ae"}, {"Æ", "ae"}, {"ÿ", "y"},
+  };
+  for (const auto &p : pairs)
+    replaceAll(s, p[0], p[1]);
+  return s;
+}
+
+static bool containsFold(const std::string &hay, const std::string &needle) {
+  if (needle.empty())
+    return true;
+  return foldText(hay).find(foldText(needle)) != std::string::npos;
+}
+
 static bool inBox(const Box &b, int x, int y) {
   return x >= b.x_min && x <= b.x_max && y >= b.y_min && y <= b.y_max;
 }
@@ -146,6 +186,9 @@ enum class Action {
   AddToPlaylist,
   ToggleHelp,
   ToggleLanguage,
+  StartSearch,
+  ValidateSearch,
+  ClearSearch,
 };
 
 static void moveSel(size_t &sel, int delta, size_t count) {
@@ -245,6 +288,36 @@ int main(int argc, char **argv) {
     ui.error.clear();
   };
 
+  // ---------- Recherche (panneau actif) ----------
+  auto clearSearch = [&] {
+    ui.searching = false;
+    ui.query.clear();
+  };
+  auto browserVisible = [&] {
+    std::vector<size_t> out;
+    const auto &es = browser.entries();
+    for (size_t i = 0; i < es.size(); ++i) {
+      const bool filtered = ui.searchPanel == Panel::Browser &&
+                            !ui.query.empty();
+      if (!filtered || containsFold(es[i].name, ui.query))
+        out.push_back(i);
+    }
+    return out;
+  };
+  auto queueVisible = [&] {
+    std::vector<size_t> out;
+    const auto &ts = player.queue().tracks();
+    for (size_t i = 0; i < ts.size(); ++i) {
+      const bool filtered =
+          ui.searchPanel == Panel::Queue && !ui.query.empty();
+      if (!filtered ||
+          containsFold(ts[i].title + " " + ts[i].artist + " " + ts[i].album,
+                       ui.query))
+        out.push_back(i);
+    }
+    return out;
+  };
+
   // Puces de la barre de commandes : touche encadrée + libellé.
   auto chipElement = [](const std::string &key, const std::string &label,
                         const Color &c) {
@@ -325,21 +398,34 @@ int main(int argc, char **argv) {
 
   auto renderBrowser = [&] {
     const auto &es = browser.entries();
-    size_t count = es.size() + 1;
+    const auto vis = browserVisible();
+    size_t count = vis.size() + 1;
     ui.browserSel = std::min(ui.browserSel, count - 1);
     bool focused = ui.focus == Panel::Browser;
 
     Elements rows;
     browserRowBoxes.assign(count, Box{});
     for (size_t i = 0; i < count; ++i) {
-      std::string label =
-          i == 0 ? "  .." : (es[i - 1].isDir ? "▸ " : "  ") + es[i - 1].name;
+      std::string label = "  ..";
+      if (i > 0) {
+        const auto &e = es[vis[i - 1]];
+        label = (e.isDir ? "▸ " : "  ") + e.name;
+      }
       Element row = text(label) | reflect(browserRowBoxes[i]);
       if (i == ui.browserSel)
         row = row | (focused ? inverted : bold) | focus;
       rows.push_back(row);
     }
-    auto box = window(text(" " + browser.cwd().string() + " "),
+
+    std::string titleText = " " + browser.cwd().string() + " ";
+    if (ui.searchPanel == Panel::Browser && !ui.query.empty()) {
+      titleText =
+          " " + trf(vis.size() == 1 ? Str::FilterIndicatorOne
+                                    : Str::FilterIndicator,
+                    {ui.query, std::to_string(vis.size())}) +
+          " ";
+    }
+    auto box = window(text(titleText),
                       vbox(std::move(rows)) | vscroll_indicator | yframe) |
                flex | reflect(browserPanelBox);
     return focused ? box | color(Color::Cyan) : box;
@@ -347,28 +433,41 @@ int main(int argc, char **argv) {
 
   auto renderQueue = [&] {
     const auto &tracks = player.queue().tracks();
-    ui.queueSel = tracks.empty() ? 0 : std::min(ui.queueSel, tracks.size() - 1);
+    const auto vis = queueVisible();
+    ui.queueSel = vis.empty() ? 0 : std::min(ui.queueSel, vis.size() - 1);
     bool focused = ui.focus == Panel::Queue;
 
     Elements rows;
     int total = 0;
-    queueRowBoxes.assign(tracks.size(), Box{});
-    for (size_t i = 0; i < tracks.size(); ++i) {
-      total += tracks[i].durationSec;
-      bool cur = player.currentTrack() && i == player.queue().currentIndex();
-      Element row = hbox({text(cur ? "▶ " : "  "), text(tracks[i].title) | flex,
-                          text(" " + fmtTrackTime(tracks[i].durationSec))}) |
+    for (const auto &t : tracks)
+      total += t.durationSec;
+    queueRowBoxes.assign(vis.size(), Box{});
+    for (size_t i = 0; i < vis.size(); ++i) {
+      const Track &t = tracks[vis[i]];
+      bool cur = player.currentTrack() && vis[i] == player.queue().currentIndex();
+      Element row = hbox({text(cur ? "▶ " : "  "), text(t.title) | flex,
+                          text(" " + fmtTrackTime(t.durationSec))}) |
                     reflect(queueRowBoxes[i]);
       if (i == ui.queueSel)
         row = row | (focused ? inverted : bold) | focus;
       rows.push_back(row);
     }
     rows.push_back(filler());
+
+    std::string queueTitle = " " + std::string(tr(Str::QueueTitle)) + " ";
+    if (ui.searchPanel == Panel::Queue && !ui.query.empty()) {
+      queueTitle =
+          " " + trf(vis.size() == 1 ? Str::FilterIndicatorOne
+                                    : Str::FilterIndicator,
+                    {ui.query, std::to_string(vis.size())}) +
+          " ";
+    }
     auto box =
-        window(text(" " + std::string(tr(Str::QueueTitle)) + " "),
+        window(text(queueTitle),
                vbox({vbox(std::move(rows)) | vscroll_indicator | yframe | flex,
                      separator(),
-                     text(trf(Str::TracksCount,
+                     text(trf(tracks.size() == 1 ? Str::TrackCountOne
+                                                : Str::TracksCount,
                               {std::to_string(tracks.size())}) +
                           " · " + fmtTrackTime(total))})) |
         flex | reflect(queuePanelBox);
@@ -414,6 +513,7 @@ int main(int argc, char **argv) {
       specs.clear();
       act("␣", tr(Str::Pause), cPlay, Action::TogglePlay);
       act("n", tr(Str::Next), cPlay, Action::Next);
+      act("/", tr(Str::SearchChip), cNav, Action::StartSearch);
       act("⏎", tr(Str::Play), cNav, Action::Activate);
       act("?", tr(Str::HelpChip), cPl, Action::ToggleHelp);
     };
@@ -434,6 +534,9 @@ int main(int argc, char **argv) {
     } else if (ui.popup == PopupMode::AddTrack) {
       evt("⏎", tr(Str::AddHere), cPlay, Event::Return);
       evt("esc", tr(Str::Cancel), cNav, Event::Escape);
+    } else if (ui.searching) {
+      act("⏎", tr(Str::Validate), cPlay, Action::ValidateSearch);
+      act("esc", tr(Str::Cancel), cNav, Action::ClearSearch);
     } else {
       act("␣", tr(Str::Pause), cPlay, Action::TogglePlay);
       act("n", tr(Str::Next), cPlay, Action::Next);
@@ -441,6 +544,7 @@ int main(int argc, char **argv) {
       act("←", tr(Str::SeekBack), cNav, Action::SeekBackward);
       act("→", tr(Str::SeekFwd), cNav, Action::SeekForward);
       act("j/k", tr(Str::Navigate), cNav, Action::Down);
+      act("/", tr(Str::SearchChip), cNav, Action::StartSearch);
       act("a", tr(Str::AddFile), cPl, Action::AddFile);
       act("p", tr(Str::PlaylistsChip), cPl, Action::OpenPlaylists);
       act("?", tr(Str::HelpChip), cPl, Action::ToggleHelp);
@@ -479,8 +583,15 @@ int main(int argc, char **argv) {
       msg = text(" " + ui.message) |
             color(ui.messageIsError ? Color::Red : Color::Green) | bold;
 
+    Elements content;
+    if (ui.searching)
+      content.push_back(hbox({text(" / "), text(ui.query),
+                              text("█") | blink}));
+    content.push_back(msg);
+    content.push_back(hbox(std::move(row)));
+
     return window(text(" " + std::string(tr(Str::CommandsTitle)) + " "),
-                  vbox({msg, hbox(std::move(row))}));
+                  vbox(std::move(content)));
   };
 
   auto renderPopup = [&]() -> Element {
@@ -539,7 +650,8 @@ int main(int argc, char **argv) {
     popupRowBoxes.assign(plNames.size() + 1, Box{});
     for (size_t i = 0; i < plNames.size(); ++i) {
       Element row = hbox({text("  " + plNames[i]) | flex,
-                          text(trf(Str::TracksCount,
+                          text(trf(plCounts[i] == 1 ? Str::TrackCountOne
+                                                   : Str::TracksCount,
                                    {std::to_string(plCounts[i])}) +
                                "  ")}) |
                     reflect(popupRowBoxes[i]);
@@ -793,15 +905,15 @@ int main(int argc, char **argv) {
     }
     case Action::Up:
       if (inBrowser)
-        moveSel(ui.browserSel, -1, es.size() + 1);
+        moveSel(ui.browserSel, -1, browserVisible().size() + 1);
       else
-        moveSel(ui.queueSel, -1, player.queue().tracks().size());
+        moveSel(ui.queueSel, -1, queueVisible().size());
       break;
     case Action::Down:
       if (inBrowser)
-        moveSel(ui.browserSel, 1, es.size() + 1);
+        moveSel(ui.browserSel, 1, browserVisible().size() + 1);
       else
-        moveSel(ui.queueSel, 1, player.queue().tracks().size());
+        moveSel(ui.queueSel, 1, queueVisible().size());
       break;
     case Action::FocusBrowser:
       ui.focus = Panel::Browser;
@@ -810,16 +922,20 @@ int main(int argc, char **argv) {
       ui.focus = Panel::Queue;
       break;
     case Action::Activate: {
+      const auto vis = inBrowser ? browserVisible() : queueVisible();
       if (!inBrowser) {
-        player.playQueueIndex(ui.queueSel);
+        if (ui.queueSel < vis.size())
+          player.playQueueIndex(vis[ui.queueSel]);
       } else if (ui.browserSel == 0) {
         browser.up();
         ui.browserSel = 0;
-      } else if (ui.browserSel <= es.size()) {
-        const auto &entry = es[ui.browserSel - 1];
+        clearSearch();
+      } else if (ui.browserSel <= vis.size()) {
+        const auto &entry = es[vis[ui.browserSel - 1]];
         if (entry.isDir) {
-          browser.enter(ui.browserSel - 1);
+          browser.enter(vis[ui.browserSel - 1]);
           ui.browserSel = 0;
+          clearSearch();
         } else {
           // Joue ce fichier, et met tous les fichiers du dossier dans la file
           std::vector<Track> tracks;
@@ -838,29 +954,48 @@ int main(int argc, char **argv) {
       }
       break;
     }
-    case Action::AddFile:
-      if (inBrowser && ui.browserSel > 0 && ui.browserSel <= es.size() &&
-          !es[ui.browserSel - 1].isDir)
-        player.enqueue(readTrack(es[ui.browserSel - 1].path));
+    case Action::AddFile: {
+      const auto vis = browserVisible();
+      if (inBrowser && ui.browserSel > 0 && ui.browserSel <= vis.size() &&
+          !es[vis[ui.browserSel - 1]].isDir)
+        player.enqueue(readTrack(es[vis[ui.browserSel - 1]].path));
       break;
-    case Action::AddFolder:
-      if (inBrowser && ui.browserSel > 0 && ui.browserSel <= es.size() &&
-          es[ui.browserSel - 1].isDir)
-        player.enqueueAll(browser.audioFilesIn(es[ui.browserSel - 1].path));
+    }
+    case Action::AddFolder: {
+      const auto vis = browserVisible();
+      if (inBrowser && ui.browserSel > 0 && ui.browserSel <= vis.size() &&
+          es[vis[ui.browserSel - 1]].isDir)
+        player.enqueueAll(
+            browser.audioFilesIn(es[vis[ui.browserSel - 1]].path));
       break;
+    }
     case Action::OpenPlaylists:
       refreshPlaylists();
       ui.plSel = 0;
       ui.popup = PopupMode::Manage;
       break;
-    case Action::AddToPlaylist:
-      if (inBrowser && ui.browserSel > 0 && ui.browserSel <= es.size() &&
-          !es[ui.browserSel - 1].isDir) {
-        ui.pendingTrack = std::filesystem::absolute(es[ui.browserSel - 1].path);
+    case Action::AddToPlaylist: {
+      const auto vis = browserVisible();
+      if (inBrowser && ui.browserSel > 0 && ui.browserSel <= vis.size() &&
+          !es[vis[ui.browserSel - 1]].isDir) {
+        ui.pendingTrack =
+            std::filesystem::absolute(es[vis[ui.browserSel - 1]].path);
         refreshPlaylists();
         ui.plSel = 0;
         ui.popup = PopupMode::AddTrack;
       }
+      break;
+    }
+    case Action::StartSearch:
+      ui.searchPanel = ui.focus;
+      ui.query.clear();
+      ui.searching = true;
+      break;
+    case Action::ValidateSearch:
+      ui.searching = false;
+      break;
+    case Action::ClearSearch:
+      clearSearch();
       break;
     case Action::ToggleHelp:
       ui.popup = ui.popup == PopupMode::Help ? PopupMode::None : PopupMode::Help;
@@ -988,6 +1123,39 @@ int main(int argc, char **argv) {
         }
       }
       return false;
+    }
+
+    // ---- Saisie de la recherche ----
+    if (ui.searching) {
+      if (e == Event::Escape) {
+        perform(Action::ClearSearch);
+        return true;
+      }
+      if (e == Event::Return) {
+        perform(Action::ValidateSearch);
+        return true;
+      }
+      if (e == Event::Backspace) {
+        while (!ui.query.empty() && (ui.query.back() & 0xC0) == 0x80)
+          ui.query.pop_back();
+        if (!ui.query.empty())
+          ui.query.pop_back();
+        return true;
+      }
+      if (e.is_character()) {
+        if (ui.query.size() < 80)
+          ui.query += e.character();
+        return true;
+      }
+      return true; // la saisie capture les autres touches
+    }
+    if (e == Event::Escape && !ui.query.empty()) {
+      perform(Action::ClearSearch);
+      return true;
+    }
+    if (e == Event::Character('/')) {
+      perform(Action::StartSearch);
+      return true;
     }
 
     // ---- Clavier ----

@@ -21,8 +21,11 @@ enum class Lang { En, Fr };
   X(UnknownArtist, "Unknown artist", "Artiste inconnu")                       \
   X(UnknownAlbum, "Unknown album", "Album inconnu")                           \
   X(TracksCount, "{0} tracks", "{0} pistes")                                  \
+  X(TrackCountOne, "{0} track", "{0} piste")                                  \
   X(FilterIndicator, "filter: {0} ({1} results)",                             \
     "filtre : {0} ({1} résultats)")                                           \
+  X(FilterIndicatorOne, "filter: {0} (1 result)",                             \
+    "filtre : {0} (1 résultat)")                                           \
   X(NewPlaylistItem, "+ New playlist…", "+ Nouvelle playlist…")               \
   X(TerminalTooSmall, "Terminal too small (min 40x12)",                       \
     "Terminal trop petit (min 40x12)")                                        \

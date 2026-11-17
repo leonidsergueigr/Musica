@@ -23,4 +23,9 @@ struct UiState {
 
   std::string message;
   bool messageIsError = false;
+
+  // Recherche : filtre le panneau actif, saisie manuelle.
+  bool searching = false;
+  std::string query;
+  Panel searchPanel = Panel::Browser;
 };
