@@ -4,8 +4,10 @@
 #include "Track.hpp"
 #include "UiState.hpp"
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <ftxui/component/component.hpp>
@@ -29,7 +31,78 @@ static std::string fmtTrackTime(int s) {
   return fmtTime(static_cast<float>(s));
 }
 
-// Déplace une sélection de delta dans [0, count-1]
+static std::string rep(const std::string &s, int n) {
+  std::string out;
+  out.reserve(s.size() * static_cast<size_t>(std::max(0, n)));
+  for (int i = 0; i < n; ++i)
+    out += s;
+  return out;
+}
+
+// Barre de progression textuelle : ━ plein, ● curseur, ─ reste.
+static std::string barString(float frac, int width, bool asciiCursor = false) {
+  if (width <= 0)
+    return {};
+  frac = std::clamp(frac, 0.0f, 1.0f);
+  int pos = std::clamp(static_cast<int>(frac * (width - 1)), 0, width - 1);
+  std::string out;
+  for (int i = 0; i < width; ++i) {
+    if (i == pos)
+      out += asciiCursor ? "|" : "●";
+    else if (i < pos)
+      out += "━";
+    else
+      out += "─";
+  }
+  return out;
+}
+
+// Spectre multi-lignes. `rows` lignes de haut, chaque barre fait `barWidth`
+// cellules. La ligne supérieure de chaque barre utilise les huit niveaux
+// ▁▂▃▄▅▆▇█ pour la finesse.
+static Element renderSpectrumElement(
+    const std::array<float, Spectrum::kBands> &bands, int barCount, int rows,
+    int barWidth, bool gap) {
+  static const char *levels[] = {"▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"};
+  barCount = std::max(1, barCount);
+  rows = std::max(1, rows);
+  barWidth = std::max(1, barWidth);
+
+  Elements cols;
+  for (int j = 0; j < barCount; ++j) {
+    const int b0 = j * static_cast<int>(Spectrum::kBands) / barCount;
+    const int b1 = std::max(b0 + 1, (j + 1) * static_cast<int>(Spectrum::kBands) /
+                                       barCount);
+    float v = 0.0f;
+    for (int k = b0; k < b1 && k < static_cast<int>(bands.size()); ++k)
+      v = std::max(v, bands[k]);
+
+    const float t = barCount > 1 ? static_cast<float>(j) / (barCount - 1) : 0.f;
+    const Color c(Color::RGB(static_cast<uint8_t>(60 + t * 150),
+                             static_cast<uint8_t>(210 - t * 110), 255));
+
+    const float h = v * static_cast<float>(rows);
+    const int full = std::clamp(static_cast<int>(h), 0, rows);
+    const float frac = h - std::floor(h);
+
+    Elements lines;
+    for (int r = rows - 1; r >= 0; --r) {
+      if (r < full) {
+        lines.push_back(text(rep("█", barWidth)) | color(c));
+      } else if (r == full && frac > 0.05f) {
+        const int lvl = std::clamp(static_cast<int>(frac * 8.0f), 0, 7);
+        lines.push_back(text(rep(levels[lvl], barWidth)) | color(c));
+      } else {
+        lines.push_back(text(std::string(barWidth, ' ')));
+      }
+    }
+    cols.push_back(vbox(std::move(lines)));
+    if (gap && j + 1 < barCount)
+      cols.push_back(text(" "));
+  }
+  return hbox(std::move(cols));
+}
+
 static void moveSel(size_t &sel, int delta, size_t count) {
   if (count == 0) {
     sel = 0;
@@ -75,27 +148,61 @@ int main() {
   // ---------- Rendu ----------
   auto renderBar = [&] {
     const Track *t = player.currentTrack();
-    float pos = player.position(), dur = player.duration();
+    const float pos = player.position();
+    const float dur = player.duration();
+    const int screenW = screen.dimx();
+    const int screenH = screen.dimy();
+    const bool compact = screenW < 80 || screenH < 24;
+
     std::string title = t ? t->title : "Rien en cours";
-    std::string artist = (t && !t->artist.empty()) ? t->artist : "—";
+    std::string artist = (t && !t->artist.empty()) ? t->artist : "";
+    std::string nowPlaying =
+        std::string(player.isPlaying() ? "▶ " : "⏸ ") +
+        (artist.empty() ? title : artist + " — " + title);
+
     std::string flags =
-        std::string(player.queue().shuffle() ? "⇄ on " : "⇄ off ") +
+        std::string(player.queue().shuffle() ? "⇄ on" : "⇄ off") + "   " +
         (player.queue().repeat() == RepeatMode::Off   ? "↻ off"
          : player.queue().repeat() == RepeatMode::All ? "↻ all"
                                                       : "↻ one");
-    return window(
-        text(" Lecture "),
-        vbox({
-            text(std::string(player.isPlaying() ? "▶ " : "⏸ ") + title) | bold,
-            text("  " + artist) | dim,
-            hbox({
-                text(fmtTime(pos) + " "),
-                gauge(dur > 0 ? pos / dur : 0.f) | flex,
-                text(" " + fmtTime(dur) + "   vol " +
-                     std::to_string(int(player.volume() * 100)) + "%   " +
-                     flags),
-            }),
-        }));
+    const std::string volume =
+        "vol " + barString(player.volume(), 10) + " " +
+        std::to_string(static_cast<int>(player.volume() * 100)) + "%";
+
+    // Spectre : nombre de barres adapté à la largeur disponible.
+    const int logoW = compact ? 0 : 16;
+    const int rightW = std::max(20, screenW - logoW - 4);
+    const int rows = compact ? 1 : 5;
+    const int barWidth = compact ? 1 : 3;
+    const int step = barWidth + 1; // 3 cellules + 1 espace
+    const int maxBars = compact ? std::max(8, rightW) : rightW / step;
+    const int barCount = std::clamp(maxBars, compact ? 8 : 12, 32);
+
+    Element spectrum = renderSpectrumElement(
+        player.spectrum().bands(), barCount, rows, barWidth, !compact);
+    if (!compact)
+      spectrum = hbox({filler(), spectrum, filler()});
+
+    Element right = vbox({
+        spectrum,
+        hbox({text(fmtTime(pos)) | dim,
+              gauge(dur > 0 ? pos / dur : 0.f) | flex,
+              text(fmtTime(dur)) | dim}),
+        text(nowPlaying) | bold | center,
+        hbox({text("⏮  ⏯  ⏭   "), text(flags), text("   " + volume)}) | center,
+    });
+
+    if (compact)
+      return window(text(" Musica "), std::move(right)) | flex;
+
+    Element logo = vbox({
+        filler(),
+        text("M U S I C A") | bold | color(Color::Cyan) | center,
+        filler(),
+    }) | size(WIDTH, EQUAL, logoW);
+
+    return window(text(" Musica "),
+                  hbox({std::move(logo), std::move(right) | flex}));
   };
 
   auto renderBrowser = [&] {
@@ -486,7 +593,7 @@ int main() {
   std::atomic<bool> running{true};
   std::thread ticker([&] {
     while (running) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
       {
         std::lock_guard<std::mutex> lk(mtx);
         player.tick();
