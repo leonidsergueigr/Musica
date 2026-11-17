@@ -222,6 +222,9 @@ enum class Action {
   ValidateSearch,
   ClearSearch,
   ShowInfo,
+  RemoveTrack,
+  MoveTrackUp,
+  MoveTrackDown,
 };
 
 static void moveSel(size_t &sel, int delta, size_t count) {
@@ -646,6 +649,8 @@ int main(int argc, char **argv) {
       act("a", tr(Str::AddFile), cPl, Action::AddFile);
       act("p", tr(Str::PlaylistsChip), cPl, Action::OpenPlaylists);
       act("i", tr(Str::InfoChip), cNav, Action::ShowInfo);
+      act("x", tr(Str::RemoveChip), cNav, Action::RemoveTrack);
+      act("J/K", tr(Str::HkMove), cNav, Action::MoveTrackDown);
       act("?", tr(Str::HelpChip), cPl, Action::ToggleHelp);
 
       int total = 0;
@@ -1127,6 +1132,26 @@ int main(int argc, char **argv) {
           player.enqueue(cachedTrack(p));
       break;
     }
+    case Action::RemoveTrack:
+      if (!inBrowser) {
+        const auto vis = queueVisible();
+        if (ui.queueSel < vis.size()) {
+          player.removeQueueIndex(vis[ui.queueSel]);
+          moveSel(ui.queueSel, 0, queueVisible().size());
+        }
+      }
+      break;
+    case Action::MoveTrackUp:
+    case Action::MoveTrackDown:
+      if (!inBrowser) {
+        const auto vis = queueVisible();
+        if (ui.queueSel < vis.size()) {
+          const int delta = a == Action::MoveTrackUp ? -1 : 1;
+          player.moveQueueIndex(vis[ui.queueSel], delta);
+          moveSel(ui.queueSel, delta, queueVisible().size());
+        }
+      }
+      break;
     case Action::ShowInfo: {
       bool found = false;
       if (inBrowser) {
@@ -1378,6 +1403,18 @@ int main(int argc, char **argv) {
     }
     if (e == Event::Character('i')) {
       perform(Action::ShowInfo);
+      return true;
+    }
+    if (e == Event::Character('x')) {
+      perform(Action::RemoveTrack);
+      return true;
+    }
+    if (e == Event::Character('J')) {
+      perform(Action::MoveTrackDown);
+      return true;
+    }
+    if (e == Event::Character('K')) {
+      perform(Action::MoveTrackUp);
       return true;
     }
     if (e == Event::Return) {

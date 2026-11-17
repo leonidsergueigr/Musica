@@ -50,6 +50,24 @@ void Player::playQueueIndex(size_t i) {
     loadCurrent(true);
 }
 
+void Player::removeQueueIndex(size_t i) {
+  const bool wasCurrent =
+      queue_.current() != nullptr && queue_.currentIndex() == i;
+  const bool wasPlaying = playing_;
+  if (!queue_.remove(i))
+    return;
+  if (queue_.tracks().empty()) {
+    engine_.pause();
+    playing_ = false;
+  } else if (wasCurrent) {
+    loadCurrent(wasPlaying);
+  }
+}
+
+void Player::moveQueueIndex(size_t i, int delta) {
+  queue_.move(i, delta);
+}
+
 void Player::clear() {
   engine_.pause();
   queue_.clear();

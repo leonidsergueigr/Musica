@@ -63,6 +63,52 @@ bool Queue::jumpTo(size_t idx) {
   return true;
 }
 
+bool Queue::remove(size_t trackIndex) {
+  const auto it = std::find(order_.begin(), order_.end(), trackIndex);
+  if (it == order_.end())
+    return false;
+  const size_t p = static_cast<size_t>(it - order_.begin());
+
+  order_.erase(order_.begin() + static_cast<long>(p));
+  for (auto &o : order_)
+    if (o > trackIndex)
+      --o;
+  tracks_.erase(tracks_.begin() + static_cast<long>(trackIndex));
+
+  if (order_.empty()) {
+    pos_ = 0;
+    return true;
+  }
+  if (p < pos_)
+    --pos_;
+  else if (p == pos_)
+    pos_ = std::min(pos_, order_.size() - 1);
+  return true;
+}
+
+bool Queue::move(size_t trackIndex, int delta) {
+  const long to = static_cast<long>(trackIndex) + delta;
+  if (to < 0 || to >= static_cast<long>(tracks_.size()))
+    return false;
+  const size_t target = static_cast<size_t>(to);
+  if (target == trackIndex)
+    return true;
+
+  // Les identifiants de order_ désignent des emplacements : on échange le
+  // contenu de deux emplacements et on suit la piste en cours de lecture.
+  const size_t cur = order_.empty() ? 0 : order_[pos_];
+  std::swap(tracks_[trackIndex], tracks_[target]);
+  size_t curId = cur;
+  if (cur == trackIndex)
+    curId = target;
+  else if (cur == target)
+    curId = trackIndex;
+  const auto it = std::find(order_.begin(), order_.end(), curId);
+  if (it != order_.end())
+    pos_ = static_cast<size_t>(it - order_.begin());
+  return true;
+}
+
 void Queue::setShuffle(bool on) {
   shuffle_ = on;
   rebuildOrder();
