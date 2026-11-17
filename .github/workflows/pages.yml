@@ -31,4 +31,3 @@ jobs:
           path: site
       - id: deployment
         uses: actions/deploy-pages@v4.0.5
-# Trigger deployment
