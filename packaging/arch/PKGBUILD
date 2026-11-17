@@ -1,0 +1,33 @@
+# Maintainer: Léonid Gr <leonidgrdev@gmail.com>
+pkgname=musica
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Terminal music player with album art and a live spectrum"
+arch=('x86_64')
+url="https://github.com/leonidsergueigr/Musica"
+license=('MIT')
+depends=('gcc-libs' 'glibc' 'zlib')
+# TODO(owner): confirm that the repositories provide FTXUI 7 and TagLib 2.
+makedepends=('cmake' 'ninja' 'ftxui' 'taglib')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('TODO(owner)')
+
+build() {
+  cmake -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DMUSICA_SYSTEM_DEPS=ON \
+    -DMUSICA_BUILD_TESTS=ON
+  cmake --build build
+}
+
+check() {
+  ctest --test-dir build --output-on-failure
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 THIRD_PARTY_LICENSES.md \
+    "$pkgdir/usr/share/licenses/$pkgname/THIRD_PARTY_LICENSES.md"
+}
