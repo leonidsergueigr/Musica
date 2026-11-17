@@ -3,6 +3,7 @@
 #include "I18n.hpp"
 #include "Player.hpp"
 #include "PlaylistStore.hpp"
+#include "StateStore.hpp"
 #include "Track.hpp"
 #include "UiState.hpp"
 #include <algorithm>
@@ -241,6 +242,7 @@ int main(int argc, char **argv) {
   bool noMouse = false;
   bool showHelp = false;
   bool showVersion = false;
+  bool langGiven = false;
   Lang lang = detectLang();
 
   for (int i = 1; i < argc; ++i) {
@@ -249,14 +251,20 @@ int main(int argc, char **argv) {
       noMouse = true;
     } else if (arg == "--lang" && i + 1 < argc) {
       lang = std::string(argv[++i]) == "fr" ? Lang::Fr : Lang::En;
+      langGiven = true;
     } else if (arg.rfind("--lang=", 0) == 0) {
       lang = arg.substr(7) == "fr" ? Lang::Fr : Lang::En;
+      langGiven = true;
     } else if (arg == "--help" || arg == "-h") {
       showHelp = true;
     } else if (arg == "--version" || arg == "-v") {
       showVersion = true;
     }
   }
+  // L'état sauvegardé ne s'applique que si --lang n'est pas explicite.
+  const SavedState saved = loadState();
+  if (!langGiven && (saved.lang == "fr" || saved.lang == "en"))
+    lang = saved.lang == "fr" ? Lang::Fr : Lang::En;
   setLang(lang);
 
   if (showVersion) {
@@ -276,10 +284,20 @@ int main(int argc, char **argv) {
   Player player;
   if (!player.init())
     return 1;
-  FileBrowser browser;
+  std::filesystem::path startDir = std::filesystem::current_path();
+  if (!saved.lastDir.empty()) {
+    std::error_code dirEc;
+    if (std::filesystem::is_directory(saved.lastDir, dirEc))
+      startDir = saved.lastDir;
+  }
+  FileBrowser browser(startDir);
   PlaylistStore store;
   UiState ui;
   std::mutex mtx; // protège player + browser + store + ui
+
+  player.setVolume(saved.volume);
+  player.queue().setShuffle(saved.shuffle);
+  player.queue().setRepeat(static_cast<RepeatMode>(saved.repeat));
 
   std::vector<std::string> plNames;
   std::vector<size_t> plCounts;
@@ -1549,4 +1567,12 @@ int main(int argc, char **argv) {
   }
   coverCv.notify_all();
   coverThread.join();
+
+  SavedState out;
+  out.lastDir = browser.cwd().string();
+  out.volume = player.volume();
+  out.shuffle = player.queue().shuffle();
+  out.repeat = static_cast<int>(player.queue().repeat());
+  out.lang = currentLang() == Lang::Fr ? "fr" : "en";
+  saveState(out);
 }

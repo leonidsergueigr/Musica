@@ -36,6 +36,7 @@ add_executable(musica
     src/main.cpp
     src/I18n.cpp
     src/CoverArt.cpp
+    src/StateStore.cpp
     src/AudioEngine.cpp
     src/Track.cpp
     src/FileBrowser.cpp
