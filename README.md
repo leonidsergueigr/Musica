@@ -79,12 +79,14 @@ progress and volume bars, click command chips and buttons.
 
 ## Third-party notices
 
+See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for the components and
+licenses bundled or fetched by the build:
+
 - [miniaudio](https://github.com/mackron/miniaudio) — public domain / MIT-0
 - [FTXUI](https://github.com/ArthurSonzogni/FTXUI) — MIT
-- [TagLib](https://github.com/taglib/taglib) — LGPL-2.1 / MPL-1.1
+- [TagLib](https://taglib.org/) — LGPL-2.1 / MPL-1.1
 - [stb_image](https://github.com/nothings/stb) — public domain / MIT
 
 ## License
 
-Musica's own license has not been chosen yet. MIT and MPL-2.0 are both
-compatible with the dependencies above (TagLib is used as a library).
+Musica is released under the [MIT license](LICENSE).

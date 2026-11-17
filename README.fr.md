@@ -80,13 +80,14 @@ de commandes et les boutons.
 
 ## Attributions tierces
 
+Voir [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) pour les composants et
+licences inclus ou récupérés à la compilation :
+
 - [miniaudio](https://github.com/mackron/miniaudio) — domaine public / MIT-0
 - [FTXUI](https://github.com/ArthurSonzogni/FTXUI) — MIT
-- [TagLib](https://github.com/taglib/taglib) — LGPL-2.1 / MPL-1.1
+- [TagLib](https://taglib.org/) — LGPL-2.1 / MPL-1.1
 - [stb_image](https://github.com/nothings/stb) — domaine public / MIT
 
 ## Licence
 
-La licence de Musica n'est pas encore choisie. MIT et MPL-2.0 sont toutes
-deux compatibles avec les dépendances ci-dessus (TagLib est utilisé comme
-bibliothèque).
+Musica est distribué sous [licence MIT](LICENSE).

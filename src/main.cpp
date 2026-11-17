@@ -267,7 +267,7 @@ int main(int argc, char **argv) {
   setLang(lang);
 
   if (showVersion) {
-    std::printf("musica %s\n", MUSICA_VERSION);
+    std::printf("musica %s\nMIT License\n", MUSICA_VERSION);
     return 0;
   }
   if (showHelp) {
