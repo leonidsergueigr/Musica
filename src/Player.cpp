@@ -59,7 +59,11 @@ void Player::previous() {
 }
 
 void Player::seekRelative(float d) {
-  float target = std::clamp(position() + d, 0.0f, duration());
+  seekTo(position() + d);
+}
+
+void Player::seekTo(float sec) {
+  const float target = std::clamp(sec, 0.0f, duration());
   engine_.gotoSecond(target);
 }
 
@@ -68,7 +72,18 @@ void Player::setVolume(float v) {
   engine_.setVolume(volume_);
 }
 
+void Player::updateSpectrum() {
+  if (playing_) {
+    std::array<float, Spectrum::kFft> buf;
+    engine_.getRecentSamples(buf.data(), buf.size());
+    spectrum_.update(buf.data(), engine_.sampleRate());
+  } else {
+    spectrum_.silence();
+  }
+}
+
 void Player::tick() {
+  updateSpectrum();
   if (playing_ && engine_.isFinish()) {
     if (queue_.next(true))
       loadCurrent(true);

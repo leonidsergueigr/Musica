@@ -1,6 +1,7 @@
 #pragma once
 #include "AudioEngine.hpp"
 #include "Queue.hpp"
+#include "Spectrum.hpp"
 
 class Player {
 public:
@@ -17,6 +18,7 @@ public:
   void next();
   void previous();
   void seekRelative(float deltaSec);
+  void seekTo(float sec);
   void setVolume(float v);
   float volume() const { return volume_; }
 
@@ -24,7 +26,7 @@ public:
   float position() { return engine_.getCurrentPosition(); }
   float duration() { return engine_.getDuration(); }
   const Track *currentTrack() const { return queue_.current(); }
-
+  const Spectrum &spectrum() const { return spectrum_; }
   void tick();
 
 private:
@@ -33,4 +35,6 @@ private:
   Queue queue_;
   float volume_ = 1.0f;
   bool playing_ = false;
+  void updateSpectrum();
+  Spectrum spectrum_;
 };
