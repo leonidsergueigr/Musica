@@ -316,6 +316,28 @@ int main(int argc, char **argv) {
   auto screen = ScreenInteractive::Fullscreen();
   screen.TrackMouse(!noMouse);
 
+  // Cache de tags : évite de relire tout un dossier à chaque lecture.
+  struct CachedTrack {
+    Track track;
+    std::filesystem::file_time_type mtime;
+  };
+  std::unordered_map<std::string, CachedTrack> trackCache;
+  auto cachedTrack = [&](const std::filesystem::path &p) -> Track {
+    std::error_code ec;
+    const auto mtime = std::filesystem::last_write_time(p, ec);
+    const std::string key = p.string();
+    const auto it = trackCache.find(key);
+    if (it != trackCache.end() && !ec && it->second.mtime == mtime)
+      return it->second.track;
+    Track track = readTrack(p);
+    if (!ec) {
+      if (trackCache.size() > 4096)
+        trackCache.clear();
+      trackCache[key] = {track, mtime};
+    }
+    return track;
+  };
+
   // ---------- Helpers playlists ----------
   auto refreshPlaylists = [&] {
     plNames = store.list();
@@ -916,7 +938,7 @@ int main(int argc, char **argv) {
         std::vector<Track> tracks;
         for (auto &p : store.load(plNames[ui.plSel]))
           if (std::filesystem::exists(p))
-            tracks.push_back(readTrack(p));
+            tracks.push_back(cachedTrack(p));
         if (!tracks.empty()) {
           player.queue().replace(std::move(tracks));
           player.playQueueIndex(0);
@@ -944,7 +966,7 @@ int main(int argc, char **argv) {
     if (e == Event::Character('a')) {
       for (auto &p : store.load(name))
         if (std::filesystem::exists(p))
-          player.enqueue(readTrack(p));
+          player.enqueue(cachedTrack(p));
       ui.message = tr(Str::MsgPlaylistQueued);
       ui.popup = PopupMode::None;
     } else if (e == Event::Character('r')) {
@@ -1040,7 +1062,7 @@ int main(int argc, char **argv) {
               continue;
             if (x.path == entry.path)
               start = tracks.size();
-            tracks.push_back(readTrack(x.path));
+            tracks.push_back(cachedTrack(x.path));
           }
           player.queue().replace(std::move(tracks), start);
           player.playQueueIndex(start);
@@ -1053,15 +1075,15 @@ int main(int argc, char **argv) {
       const auto vis = browserVisible();
       if (inBrowser && ui.browserSel > 0 && ui.browserSel <= vis.size() &&
           !es[vis[ui.browserSel - 1]].isDir)
-        player.enqueue(readTrack(es[vis[ui.browserSel - 1]].path));
+        player.enqueue(cachedTrack(es[vis[ui.browserSel - 1]].path));
       break;
     }
     case Action::AddFolder: {
       const auto vis = browserVisible();
       if (inBrowser && ui.browserSel > 0 && ui.browserSel <= vis.size() &&
           es[vis[ui.browserSel - 1]].isDir)
-        player.enqueueAll(
-            browser.audioFilesIn(es[vis[ui.browserSel - 1]].path));
+        for (const auto &p : browser.audioFilesIn(es[vis[ui.browserSel - 1]].path))
+          player.enqueue(cachedTrack(p));
       break;
     }
     case Action::OpenPlaylists:
