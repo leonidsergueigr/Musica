@@ -10,9 +10,11 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <functional>
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
+#include <ftxui/screen/string.hpp>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -137,6 +139,7 @@ enum class Action {
   AddFolder,
   OpenPlaylists,
   AddToPlaylist,
+  ToggleHelp,
 };
 
 static void moveSel(size_t &sel, int delta, size_t count) {
@@ -177,6 +180,10 @@ int main(int argc, char **argv) {
   Box popupPanelBox;
   bool dragProgress = false;
   bool dragVolume = false;
+  std::function<void(Action)> performFn;
+  std::vector<std::pair<Box, std::function<void()>>> chipHandlers;
+  std::vector<std::pair<Box, Event>> popupChipBoxes;
+  std::function<bool(Event)> handlePopup;
 
   // Détection du double-clic (même ligne, < 400 ms).
   Panel lastClickPanel = Panel::Browser;
@@ -202,6 +209,14 @@ int main(int argc, char **argv) {
     ui.prompt = std::move(prompt);
     ui.input = std::move(initial);
     ui.error.clear();
+  };
+
+  // Puces de la barre de commandes : touche encadrée + libellé.
+  auto chipElement = [](const std::string &key, const std::string &label,
+                        const Color &c) {
+    return hbox({text(" " + key + " ") | bgcolor(c) | color(Color::Black) |
+                     bold,
+                 text(" " + label)});
   };
 
   // ---------- Rendu ----------
@@ -324,24 +339,157 @@ int main(int argc, char **argv) {
     return focused ? box | color(Color::Cyan) : box;
   };
 
-  auto renderHelp = [&] {
-    return window(
-        text(" Commandes "),
-        vbox({text(ui.message) | color(Color::Green),
-              text("Lecture  ␣ pause/play  n suivant  b précédent  ←/→ ±5s  "
-                   "+/- volume  s shuffle  r repeat"),
-              text("Naviguer j/k ↕  h/l ⇆  ⏎ jouer  a +file  A +dossier  p "
-                   "playlists  P +playlist  q quitter")}) |
-            dim);
+  auto renderCommands = [&] {
+    chipHandlers.clear();
+    popupChipBoxes.clear();
+    chipHandlers.reserve(64);
+    popupChipBoxes.reserve(16);
+
+    const Color cPlay = Color::Cyan;
+    const Color cNav = Color::Green;
+    const Color cPl = Color::Magenta;
+
+    struct ChipSpec {
+      std::string key, label;
+      Color color = Color::Cyan;
+      Action action = Action::TogglePlay;
+      Event ev;
+      bool useEvent = false;
+    };
+    std::vector<ChipSpec> specs;
+    auto act = [&](std::string k, std::string l, Color c, Action a) {
+      ChipSpec s;
+      s.key = std::move(k);
+      s.label = std::move(l);
+      s.color = c;
+      s.action = a;
+      specs.push_back(std::move(s));
+    };
+    auto evt = [&](std::string k, std::string l, Color c, Event e) {
+      ChipSpec s;
+      s.key = std::move(k);
+      s.label = std::move(l);
+      s.color = c;
+      s.ev = std::move(e);
+      s.useEvent = true;
+      specs.push_back(std::move(s));
+    };
+    auto compactSet = [&] {
+      specs.clear();
+      act("␣", "Pause", cPlay, Action::TogglePlay);
+      act("n", "Suivant", cPlay, Action::Next);
+      act("⏎", "Jouer", cNav, Action::Activate);
+      act("?", "Aide", cPl, Action::ToggleHelp);
+    };
+
+    if (ui.popup == PopupMode::NameInput) {
+      evt("⏎", "Valider", cPlay, Event::Return);
+      evt("esc", "Annuler", cNav, Event::Escape);
+    } else if (ui.popup == PopupMode::Help) {
+      evt("esc", "Fermer l'aide", cNav, Event::Escape);
+      evt("?", "Fermer l'aide", cNav, Event::Character('?'));
+    } else if (ui.popup == PopupMode::Manage) {
+      evt("⏎", "Charger", cPlay, Event::Return);
+      evt("a", "+ file", cPl, Event::Character('a'));
+      evt("s", "Sauver la file", cPl, Event::Character('s'));
+      evt("r", "Renommer", cPl, Event::Character('r'));
+      evt("d", "Supprimer", cPl, Event::Character('d'));
+      evt("esc", "Fermer", cNav, Event::Escape);
+    } else if (ui.popup == PopupMode::AddTrack) {
+      evt("⏎", "Ajouter ici", cPlay, Event::Return);
+      evt("esc", "Annuler", cNav, Event::Escape);
+    } else {
+      act("␣", "Pause", cPlay, Action::TogglePlay);
+      act("n", "Suivant", cPlay, Action::Next);
+      act("b", "Précédent", cPlay, Action::Previous);
+      act("←", "-5 s", cNav, Action::SeekBackward);
+      act("→", "+5 s", cNav, Action::SeekForward);
+      act("j/k", "Naviguer", cNav, Action::Down);
+      act("a", "+ fichier", cPl, Action::AddFile);
+      act("p", "Playlists", cPl, Action::OpenPlaylists);
+      act("?", "Aide", cPl, Action::ToggleHelp);
+
+      int total = 0;
+      for (const auto &s : specs)
+        total += string_width(s.key) + string_width(s.label) + 3 + (total ? 2 : 0);
+      if (total > screen.dimx() - 4)
+        compactSet();
+    }
+
+    Elements row;
+    bool first = true;
+    for (const auto &s : specs) {
+      if (!first)
+        row.push_back(text("  "));
+      first = false;
+      if (s.useEvent) {
+        popupChipBoxes.emplace_back();
+        Box &b = popupChipBoxes.back().first;
+        popupChipBoxes.back().second = s.ev;
+        row.push_back(chipElement(s.key, s.label, s.color) | reflect(b));
+      } else {
+        chipHandlers.emplace_back();
+        Box &b = chipHandlers.back().first;
+        const Action a = s.action;
+        chipHandlers.back().second = [&performFn, a] { performFn(a); };
+        row.push_back(chipElement(s.key, s.label, s.color) | reflect(b));
+      }
+    }
+
+    Element msg = text(" ");
+    if (!ui.error.empty())
+      msg = text(" " + ui.error) | color(Color::Red) | bold;
+    else if (!ui.message.empty())
+      msg = text(" " + ui.message) |
+            color(ui.messageIsError ? Color::Red : Color::Green) | bold;
+
+    return window(text(" Commandes "), vbox({msg, hbox(std::move(row))}));
   };
 
   auto renderPopup = [&]() -> Element {
+    if (ui.popup == PopupMode::Help) {
+      auto key = [&](const std::string &k, const std::string &l) {
+        return hbox({text(" " + k + " ") | color(Color::Cyan) | bold,
+                     text(" " + l)});
+      };
+      Element left = vbox({
+          text("Lecture") | bold | color(Color::Cyan),
+          key("␣", "pause / lecture"),
+          key("n / b", "suivant / précédent"),
+          key("← / →", "-5 s / +5 s"),
+          key("+ / -", "volume"),
+          key("s / r", "shuffle / répétition"),
+          text(""),
+          text("Navigation") | bold | color(Color::Green),
+          key("j / k", "descendre / monter"),
+          key("h / l", "panneau gauche / droit"),
+          key("⏎", "jouer / entrer"),
+          key("a / A", "ajouter fichier / dossier"),
+      });
+      Element right = vbox({
+          text("Playlists") | bold | color(Color::Magenta),
+          key("p", "gérer les playlists"),
+          key("P", "ajouter le morceau"),
+          key("⏎ a s r d", "popup playlists"),
+          text(""),
+          text("Souris") | bold | color(Color::Yellow),
+          key("clic", "sélectionner / bouton"),
+          key("double-clic", "jouer / entrer"),
+          key("molette", "défiler / volume"),
+          key("glisser", "barres de position"),
+          text(""),
+          text("? / esc : fermer   q : quitter") | dim,
+      });
+      return window(text(" Aide "),
+                    hbox({left, text("   "), right})) |
+             reflect(popupPanelBox);
+    }
+
     if (ui.popup == PopupMode::NameInput) {
       Elements rows = {hbox({text("> "), text(ui.input), text("█") | blink}),
                        separator()};
       if (!ui.error.empty())
         rows.push_back(text(ui.error) | color(Color::Red));
-      rows.push_back(text("⏎ valider   esc annuler") | dim);
       return window(text(" " + ui.prompt + " "), vbox(std::move(rows))) |
              size(WIDTH, EQUAL, 50) | reflect(popupPanelBox);
     }
@@ -364,10 +512,6 @@ int main(int argc, char **argv) {
     rows.push_back(separator());
 
     bool adding = ui.popup == PopupMode::AddTrack;
-    rows.push_back(text(adding ? "⏎ ajouter ici   esc annuler"
-                               : "⏎ charger  a +file  s sauver la file  r "
-                                 "renommer  d suppr  esc") |
-                   dim);
     return window(text(adding ? " Ajouter à une playlist " : " Playlists "),
                   vbox(std::move(rows))) |
            size(WIDTH, EQUAL, 70) | reflect(popupPanelBox);
@@ -377,14 +521,31 @@ int main(int argc, char **argv) {
     std::lock_guard<std::mutex> lk(mtx);
     Element base =
         vbox({renderBar(), hbox({renderBrowser(), renderQueue()}) | flex,
-              renderHelp()});
+              renderCommands()});
     if (ui.popup == PopupMode::None)
       return base;
     return dbox({base, renderPopup() | clear_under | center});
   });
 
   // ---------- Handler du popup ----------
-  auto handlePopup = [&](Event e) -> bool {
+  handlePopup = [&](Event e) -> bool {
+    if (ui.popup == PopupMode::Help) {
+      if (e == Event::Escape || e == Event::Character('?') ||
+          e == Event::Character('q'))
+        ui.popup = PopupMode::None;
+      return true;
+    }
+
+    // ---- puces cliquables du popup ----
+    if (e.is_mouse()) {
+      const Mouse m = e.mouse();
+      if (m.motion == Mouse::Pressed && m.button == Mouse::Left) {
+        for (auto &[box, ev] : popupChipBoxes)
+          if (inBox(box, m.x, m.y))
+            return handlePopup(ev);
+      }
+    }
+
     // ---- saisie d'un nom ----
     if (ui.popup == PopupMode::NameInput) {
       if (e == Event::Escape) {
@@ -651,8 +812,12 @@ int main(int argc, char **argv) {
         ui.popup = PopupMode::AddTrack;
       }
       break;
+    case Action::ToggleHelp:
+      ui.popup = ui.popup == PopupMode::Help ? PopupMode::None : PopupMode::Help;
+      break;
     }
   };
+  performFn = perform;
 
   auto clickRow = [&](Panel p, size_t idx) {
     const auto now = std::chrono::steady_clock::now();
@@ -743,6 +908,14 @@ int main(int argc, char **argv) {
           }
         }
       }
+      if (m.motion == Mouse::Pressed && m.button == Mouse::Left) {
+        for (auto &[box, fn] : chipHandlers) {
+          if (inBox(box, m.x, m.y)) {
+            fn();
+            return true;
+          }
+        }
+      }
       if (m.button == Mouse::WheelUp || m.button == Mouse::WheelDown) {
         const int dir = m.button == Mouse::WheelDown ? 1 : -1;
         if (inBox(volumeBox, m.x, m.y)) {
@@ -763,6 +936,10 @@ int main(int argc, char **argv) {
     }
 
     // ---- Clavier ----
+    if (e == Event::Character('?')) {
+      perform(Action::ToggleHelp);
+      return true;
+    }
     if (e == Event::Character('q')) {
       perform(Action::Quit);
       return true;

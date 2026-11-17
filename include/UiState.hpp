@@ -4,7 +4,7 @@
 #include <string>
 
 enum class Panel { Browser, Queue };
-enum class PopupMode { None, Manage, AddTrack, NameInput };
+enum class PopupMode { None, Manage, AddTrack, NameInput, Help };
 enum class NameAction { Create, CreateAndAdd, Rename, SaveQueue };
 
 struct UiState {
@@ -22,4 +22,5 @@ struct UiState {
   std::filesystem::path pendingTrack;
 
   std::string message;
+  bool messageIsError = false;
 };
