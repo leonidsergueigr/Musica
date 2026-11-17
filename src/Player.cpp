@@ -50,6 +50,15 @@ void Player::playQueueIndex(size_t i) {
     loadCurrent(true);
 }
 
+void Player::clear() {
+  engine_.pause();
+  queue_.clear();
+  playing_ = false;
+  loadError_ = false;
+  skippedCount_ = 0;
+  spectrum_.silence();
+}
+
 void Player::enqueue(const Track &t) {
   bool wasEmpty = queue_.tracks().empty();
   queue_.add(t);
@@ -76,6 +85,7 @@ void Player::next() {
   if (queue_.next())
     loadCurrent(true);
   else {
+    engine_.pause();
     playing_ = false;
   }
 }
@@ -118,7 +128,9 @@ void Player::tick() {
   if (playing_ && engine_.isFinish()) {
     if (queue_.next(true))
       loadCurrent(true);
-    else
+    else {
+      engine_.pause();
       playing_ = false;
+    }
   }
 }

@@ -9,6 +9,7 @@ public:
 
   Queue &queue() { return queue_; }
   void playQueueIndex(size_t i);
+  void clear();
   void enqueue(const Track &t);
   void enqueueAll(const std::vector<std::filesystem::path> &paths); // A
 
