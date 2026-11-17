@@ -1,16 +1,20 @@
 # Musica
 
-Un lecteur de musique en terminal rapide, pilotable au clavier et à la souris, écrit en C++20,
-avec pochettes, spectre en temps réel et navigateur de dossiers.
+Un lecteur de musique en terminal pilotable au clavier et à la souris, écrit
+en C++20, avec pochettes, spectre en temps réel et navigateur de dossiers.
 
 **English: [README.md](README.md)**
+
+![Musica pendant la lecture d'une piste de démonstration](demo/musica.gif)
 
 ## Fonctionnalités
 
 - Navigateur de dossiers et file d'attente côte à côte
 - Lecture séquentielle, shuffle et répétition
-- Pochettes depuis les tags intégrés (MP3, FLAC, M4A, Ogg) ou `cover.jpg` /
-  `folder.png` à côté des fichiers, chargées en arrière-plan
+- Fichiers MP3, FLAC, WAV, Ogg Vorbis, M4A/AAC et Opus
+- Pochettes depuis les tags intégrés, ou depuis `front.*`, `cover.*`,
+  `folder.*` ou `album.*` (JPEG ou PNG) à côté de la piste, chargées en
+  arrière-plan
 - Spectre multi-lignes en temps réel
 - Barres de position et de volume interactives (clic, glisser, molette)
 - Recherche `/` en direct dans le panneau actif (insensible à la casse et aux accents)
@@ -24,21 +28,29 @@ avec pochettes, spectre en temps réel et navigateur de dossiers.
 
 ## Compilation
 
-Nécessite un compilateur C++20, CMake ≥ 3.20, et les dépendances habituelles
-de TagLib (zlib, cmake). FTXUI et TagLib sont récupérés automatiquement,
-miniaudio est fourni dans le dépôt.
+Nécessite un compilateur C++20, CMake ≥ 3.20, et zlib pour TagLib. FTXUI et
+TagLib sont téléchargés par CMake ; miniaudio et stb_image sont fournis dans le
+dépôt.
 
 ```sh
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ./build/musica
 
-# optionnel : installer le binaire musica
+# installer le binaire, la page de manuel et la documentation
 sudo cmake --install build
 ```
 
-Une capture d'écran ou un GIF peut être enregistré avec
-[vhs](https://github.com/charmbracelet/vhs) puis ajouté au README.
+Utiliser `-DMUSICA_SYSTEM_DEPS=ON` pour compiler avec un FTXUI 7 ou plus récent
+et un TagLib 2.0 ou plus récent déjà installés au lieu de les télécharger.
+Utiliser `-DMUSICA_BUILD_TESTS=ON` pour compiler les tests, puis lancer
+`ctest --test-dir build`. `cpack --config build/CPackConfig.cmake` produit une
+archive `.tar.gz` ainsi que des paquets `.deb` et `.rpm` lorsque les outils
+correspondants sont installés.
+
+Le GIF de démonstration est enregistré avec
+[vhs](https://github.com/charmbracelet/vhs) à partir de pistes synthétiques
+générées par `demo/make-media.sh`.
 
 ## Configuration et données
 
