@@ -29,6 +29,8 @@ FetchContent_MakeAvailable(ftxui taglib)
 add_executable(musica
     src/main.cpp
     src/AudioEngine.cpp
+    src/Track.cpp
+    src/FileBrowser.cpp
     external/miniaudio/miniaudio.c
 )
 
