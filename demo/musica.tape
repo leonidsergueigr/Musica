@@ -2,9 +2,9 @@
 #
 # Setup (once):
 #   - build the project:      cmake -B build && cmake --build build
-#   - put a few tagged MP3s in /tmp/musica-demo
+#   - generate demo audio:    ./demo/make-media.sh   (requires ffmpeg)
 #   - install vhs, ttyd and ffmpeg
-# Then:
+# Then, from the repository root:
 #   vhs demo/musica.tape
 
 Output demo/musica.gif
@@ -20,7 +20,7 @@ Set Framerate 30
 Set TypingSpeed 60ms
 
 Hide
-Type "cd /tmp/musica-demo && XDG_CONFIG_HOME=/tmp/musica-demo-config LANG=en_US.UTF-8 /home/leonidgr/musica/build/musica --no-mouse"
+Type "rm -rf /tmp/musica-demo /tmp/musica-demo-config && cp -r demo/media /tmp/musica-demo && cd /tmp/musica-demo && XDG_CONFIG_HOME=/tmp/musica-demo-config LANG=en_US.UTF-8 $OLDPWD/build/musica --no-mouse"
 Enter
 Sleep 1.2s
 Show
@@ -39,7 +39,7 @@ Sleep 3.5s
 # Live search over the browser panel.
 Type "/"
 Sleep 600ms
-Type "sad"
+Type "blue"
 Sleep 1.8s
 Escape
 Sleep 800ms
