@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://leonidsergueigr.github.io/Musica/sitemap.xml
