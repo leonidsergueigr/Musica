@@ -1,3 +1,4 @@
+#include "CoverArt.hpp"
 #include "FileBrowser.hpp"
 #include "I18n.hpp"
 #include "Player.hpp"
@@ -10,9 +11,11 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
 #include <cstdio>
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
@@ -20,6 +23,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #ifndef MUSICA_VERSION
@@ -150,6 +154,34 @@ static bool containsFold(const std::string &hay, const std::string &needle) {
   return foldText(hay).find(foldText(needle)) != std::string::npos;
 }
 
+// Rendu en demi-blocs : une cellule porte deux pixels verticaux.
+static Element renderCover(const CoverArt &art, int cellsW, int cellsH) {
+  if (art.w <= 0 || art.h <= 0 ||
+      art.rgb.size() < static_cast<size_t>(art.w) * art.h * 3)
+    return text("");
+
+  Elements rows;
+  rows.reserve(cellsH);
+  for (int r = 0; r < cellsH; ++r) {
+    Elements cells;
+    cells.reserve(cellsW);
+    for (int c = 0; c < cellsW; ++c) {
+      const int sx = std::clamp(c * art.w / cellsW, 0, art.w - 1);
+      auto pixel = [&](int py) {
+        const int sy = std::clamp(py * art.h / (2 * cellsH), 0, art.h - 1);
+        const uint8_t *p =
+            art.rgb.data() + (static_cast<size_t>(sy) * art.w + sx) * 3;
+        return Color::RGB(p[0], p[1], p[2]);
+      };
+      const Color top = pixel(2 * r);
+      const Color bottom = pixel(2 * r + 1);
+      cells.push_back(text("▀") | color(top) | bgcolor(bottom));
+    }
+    rows.push_back(hbox(std::move(cells)));
+  }
+  return vbox(std::move(rows));
+}
+
 static bool inBox(const Box &b, int x, int y) {
   return x >= b.x_min && x <= b.x_max && y >= b.y_min && y <= b.y_max;
 }
@@ -258,6 +290,20 @@ int main(int argc, char **argv) {
   bool dragProgress = false;
   bool dragVolume = false;
   std::function<void(Action)> performFn;
+
+  // Pochette : chargée hors des verrous principaux par un thread dédié, mise
+  // en cache par album/dossier. Toutes ces variables sont protégées par
+  // coverMutex uniquement (ordre autorisé : mtx puis coverMutex).
+  std::mutex coverMutex;
+  std::unordered_map<std::string, std::shared_ptr<const CoverArt>> coverCache;
+  std::shared_ptr<const CoverArt> currentCover;
+  std::string requestedCoverKey;
+  std::condition_variable coverCv;
+  std::string pendingCoverKey;
+  std::filesystem::path pendingCoverPath;
+  bool coverPending = false;
+  bool coverStop = false;
+
   std::vector<std::pair<Box, std::function<void()>>> chipHandlers;
   std::vector<std::pair<Box, Event>> popupChipBoxes;
   std::function<bool(Event)> handlePopup;
@@ -347,9 +393,15 @@ int main(int argc, char **argv) {
         player.queue().repeat() == RepeatMode::Off
             ? "↻ off"
             : (player.queue().repeat() == RepeatMode::All ? "↻ all" : "↻ one");
-    // Spectre : nombre de barres adapté à la largeur disponible.
+    // Pochette : masquée sur les terminaux étroits, avec placeholder stable.
+    const bool showCover = !compact && screenW >= 100;
+    constexpr int coverW = 12;
+    constexpr int coverH = 6;
     const int logoW = compact ? 0 : 16;
-    const int rightW = std::max(20, screenW - logoW - 4);
+    const int leftW = logoW + (showCover ? coverW + 1 : 0);
+
+    // Spectre : nombre de barres adapté à la largeur disponible.
+    const int rightW = std::max(20, screenW - leftW - 4);
     const int rows = compact ? 1 : 5;
     const int barWidth = compact ? 1 : 3;
     const int step = barWidth + 1; // 3 cellules + 1 espace
@@ -361,7 +413,7 @@ int main(int argc, char **argv) {
     if (!compact)
       spectrum = hbox({filler(), spectrum, filler()});
 
-    const int barW = std::max(10, screenW - logoW - 4 - 14);
+    const int barW = std::max(10, screenW - leftW - 4 - 14);
     Element progressBar = text(barString(dur > 0 ? pos / dur : 0.f, barW)) |
                           reflect(progressBox);
     Element volumeBar =
@@ -392,8 +444,26 @@ int main(int argc, char **argv) {
         filler(),
     }) | size(WIDTH, EQUAL, logoW);
 
+    Element leftBox = std::move(logo);
+    if (showCover) {
+      std::shared_ptr<const CoverArt> art;
+      {
+        std::lock_guard<std::mutex> lk(coverMutex);
+        art = currentCover;
+      }
+      Element cover = art
+          ? renderCover(*art, coverW, coverH)
+          : vbox({filler(), text("♪") | center | dim, filler()}) |
+                size(WIDTH, EQUAL, coverW) | size(HEIGHT, EQUAL, coverH);
+      leftBox = hbox({
+          vbox({filler(), std::move(cover), filler()}),
+          text(" "),
+          std::move(leftBox),
+      }) | size(WIDTH, EQUAL, leftW);
+    }
+
     return window(text(" Musica "),
-                  hbox({std::move(logo), std::move(right) | flex}));
+                  hbox({std::move(leftBox), std::move(right) | flex}));
   };
 
   auto renderBrowser = [&] {
@@ -1246,6 +1316,35 @@ int main(int argc, char **argv) {
     return false;
   });
 
+  // ---------- Thread de chargement des pochettes ----------
+  std::thread coverThread([&] {
+    std::unique_lock<std::mutex> lk(coverMutex);
+    while (true) {
+      coverCv.wait(lk, [&] { return coverPending || coverStop; });
+      if (coverStop)
+        break;
+      const std::string key = pendingCoverKey;
+      const std::filesystem::path path = pendingCoverPath;
+      coverPending = false;
+
+      std::shared_ptr<const CoverArt> art;
+      const auto it = coverCache.find(key);
+      if (it != coverCache.end()) {
+        art = it->second; // déjà chargée (ou absence déjà mémorisée)
+      } else {
+        lk.unlock(); // décodage sans aucun verrou
+        auto loaded = loadCover(path);
+        lk.lock();
+        if (loaded)
+          art = std::make_shared<const CoverArt>(std::move(*loaded));
+        coverCache[key] = art;
+      }
+      // Ignore un résultat devenu obsolète pendant le décodage.
+      if (key == requestedCoverKey)
+        currentCover = art;
+    }
+  });
+
   // ---------- Thread de rafraîchissement ----------
   std::atomic<bool> running{true};
   std::thread ticker([&] {
@@ -1254,6 +1353,27 @@ int main(int argc, char **argv) {
       {
         std::lock_guard<std::mutex> lk(mtx);
         player.tick();
+
+        const Track *track = player.currentTrack();
+        const std::string key =
+            track ? track->path.parent_path().string() + "|" + track->album
+                  : std::string();
+        bool notify = false;
+        {
+          std::lock_guard<std::mutex> coverLk(coverMutex);
+          if (key != requestedCoverKey) {
+            requestedCoverKey = key;
+            currentCover.reset();
+            if (track) {
+              pendingCoverKey = key;
+              pendingCoverPath = track->path;
+              coverPending = true;
+              notify = true;
+            }
+          }
+        }
+        if (notify)
+          coverCv.notify_one();
       }
       screen.PostEvent(Event::Custom); // force un redessin
     }
@@ -1263,4 +1383,10 @@ int main(int argc, char **argv) {
 
   running = false;
   ticker.join();
+  {
+    std::lock_guard<std::mutex> lk(coverMutex);
+    coverStop = true;
+  }
+  coverCv.notify_all();
+  coverThread.join();
 }

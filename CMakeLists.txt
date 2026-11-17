@@ -35,6 +35,7 @@ FetchContent_MakeAvailable(ftxui taglib)
 add_executable(musica
     src/main.cpp
     src/I18n.cpp
+    src/CoverArt.cpp
     src/AudioEngine.cpp
     src/Track.cpp
     src/FileBrowser.cpp
@@ -49,6 +50,7 @@ target_include_directories(musica
     PRIVATE
         include
         external/miniaudio
+        external/stb
         ${taglib_SOURCE_DIR}
         ${taglib_SOURCE_DIR}/taglib
         ${taglib_SOURCE_DIR}/taglib/toolkit
