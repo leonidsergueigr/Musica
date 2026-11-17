@@ -103,6 +103,42 @@ static Element renderSpectrumElement(
   return hbox(std::move(cols));
 }
 
+static bool inBox(const Box &b, int x, int y) {
+  return x >= b.x_min && x <= b.x_max && y >= b.y_min && y <= b.y_max;
+}
+
+static float fracInBox(const Box &b, int x) {
+  const int w = b.x_max - b.x_min;
+  if (w <= 0)
+    return 0.0f;
+  return std::clamp(static_cast<float>(x - b.x_min) / static_cast<float>(w),
+                    0.0f, 1.0f);
+}
+
+// Toutes les actions déclenchables au clavier comme à la souris passent par
+// ce point unique afin de ne pas dupliquer la logique.
+enum class Action {
+  Quit,
+  TogglePlay,
+  Next,
+  Previous,
+  SeekForward,
+  SeekBackward,
+  VolumeUp,
+  VolumeDown,
+  ToggleShuffle,
+  ToggleRepeat,
+  Up,
+  Down,
+  FocusBrowser,
+  FocusQueue,
+  Activate,
+  AddFile,
+  AddFolder,
+  OpenPlaylists,
+  AddToPlaylist,
+};
+
 static void moveSel(size_t &sel, int delta, size_t count) {
   if (count == 0) {
     sel = 0;
@@ -113,7 +149,14 @@ static void moveSel(size_t &sel, int delta, size_t count) {
       static_cast<size_t>(std::clamp<long>(v, 0, static_cast<long>(count) - 1));
 }
 
-int main() {
+int main(int argc, char **argv) {
+  bool noMouse = false;
+  for (int i = 1; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--no-mouse")
+      noMouse = true;
+  }
+
   Player player;
   if (!player.init())
     return 1;
@@ -125,7 +168,23 @@ int main() {
   std::vector<std::string> plNames;
   std::vector<size_t> plCounts;
 
+  // Zones cliquables mémorisées pendant le rendu (coordonnées écran).
+  Box progressBox, volumeBox;
+  Box prevBox, playBox, nextBox, shuffleBox, repeatBox;
+  Box browserPanelBox, queuePanelBox;
+  std::vector<Box> browserRowBoxes, queueRowBoxes;
+  std::vector<Box> popupRowBoxes;
+  Box popupPanelBox;
+  bool dragProgress = false;
+  bool dragVolume = false;
+
+  // Détection du double-clic (même ligne, < 400 ms).
+  Panel lastClickPanel = Panel::Browser;
+  long lastClickRow = -1;
+  std::chrono::steady_clock::time_point lastClick;
+
   auto screen = ScreenInteractive::Fullscreen();
+  screen.TrackMouse(!noMouse);
 
   // ---------- Helpers playlists ----------
   auto refreshPlaylists = [&] {
@@ -160,15 +219,12 @@ int main() {
         std::string(player.isPlaying() ? "▶ " : "⏸ ") +
         (artist.empty() ? title : artist + " — " + title);
 
-    std::string flags =
-        std::string(player.queue().shuffle() ? "⇄ on" : "⇄ off") + "   " +
-        (player.queue().repeat() == RepeatMode::Off   ? "↻ off"
-         : player.queue().repeat() == RepeatMode::All ? "↻ all"
-                                                      : "↻ one");
-    const std::string volume =
-        "vol " + barString(player.volume(), 10) + " " +
-        std::to_string(static_cast<int>(player.volume() * 100)) + "%";
-
+    const std::string shuffleLabel =
+        player.queue().shuffle() ? "⇄ on" : "⇄ off";
+    const std::string repeatLabel =
+        player.queue().repeat() == RepeatMode::Off
+            ? "↻ off"
+            : (player.queue().repeat() == RepeatMode::All ? "↻ all" : "↻ one");
     // Spectre : nombre de barres adapté à la largeur disponible.
     const int logoW = compact ? 0 : 16;
     const int rightW = std::max(20, screenW - logoW - 4);
@@ -183,13 +239,25 @@ int main() {
     if (!compact)
       spectrum = hbox({filler(), spectrum, filler()});
 
+    const int barW = std::max(10, screenW - logoW - 4 - 14);
+    Element progressBar = text(barString(dur > 0 ? pos / dur : 0.f, barW)) |
+                          reflect(progressBox);
+    Element volumeBar =
+        text(barString(player.volume(), 10)) | reflect(volumeBox);
+
     Element right = vbox({
         spectrum,
-        hbox({text(fmtTime(pos)) | dim,
-              gauge(dur > 0 ? pos / dur : 0.f) | flex,
-              text(fmtTime(dur)) | dim}),
+        hbox({text(fmtTime(pos)) | dim, progressBar, text(" " + fmtTime(dur)) | dim}),
         text(nowPlaying) | bold | center,
-        hbox({text("⏮  ⏯  ⏭   "), text(flags), text("   " + volume)}) | center,
+        hbox({text("⏮") | reflect(prevBox), text("  "),
+              text("⏯") | reflect(playBox), text("  "),
+              text("⏭") | reflect(nextBox), text("   "),
+              text(shuffleLabel) | reflect(shuffleBox), text("   "),
+              text(repeatLabel) | reflect(repeatBox), text("   vol "),
+              volumeBar,
+              text(" " + std::to_string(static_cast<int>(player.volume() * 100)) +
+                   "%")}) |
+            center,
     });
 
     if (compact)
@@ -212,17 +280,18 @@ int main() {
     bool focused = ui.focus == Panel::Browser;
 
     Elements rows;
+    browserRowBoxes.assign(count, Box{});
     for (size_t i = 0; i < count; ++i) {
       std::string label =
           i == 0 ? "  .." : (es[i - 1].isDir ? "▸ " : "  ") + es[i - 1].name;
-      Element row = text(label);
+      Element row = text(label) | reflect(browserRowBoxes[i]);
       if (i == ui.browserSel)
         row = row | (focused ? inverted : bold) | focus;
       rows.push_back(row);
     }
     auto box = window(text(" " + browser.cwd().string() + " "),
                       vbox(std::move(rows)) | vscroll_indicator | yframe) |
-               flex;
+               flex | reflect(browserPanelBox);
     return focused ? box | color(Color::Cyan) : box;
   };
 
@@ -233,11 +302,13 @@ int main() {
 
     Elements rows;
     int total = 0;
+    queueRowBoxes.assign(tr.size(), Box{});
     for (size_t i = 0; i < tr.size(); ++i) {
       total += tr[i].durationSec;
       bool cur = player.currentTrack() && i == player.queue().currentIndex();
       Element row = hbox({text(cur ? "▶ " : "  "), text(tr[i].title) | flex,
-                          text(" " + fmtTrackTime(tr[i].durationSec))});
+                          text(" " + fmtTrackTime(tr[i].durationSec))}) |
+                    reflect(queueRowBoxes[i]);
       if (i == ui.queueSel)
         row = row | (focused ? inverted : bold) | focus;
       rows.push_back(row);
@@ -249,7 +320,7 @@ int main() {
                      separator(),
                      text(std::to_string(tr.size()) + " pistes · " +
                           fmtTrackTime(total))})) |
-        flex;
+        flex | reflect(queuePanelBox);
     return focused ? box | color(Color::Cyan) : box;
   };
 
@@ -272,18 +343,21 @@ int main() {
         rows.push_back(text(ui.error) | color(Color::Red));
       rows.push_back(text("⏎ valider   esc annuler") | dim);
       return window(text(" " + ui.prompt + " "), vbox(std::move(rows))) |
-             size(WIDTH, EQUAL, 50);
+             size(WIDTH, EQUAL, 50) | reflect(popupPanelBox);
     }
 
     Elements rows;
+    popupRowBoxes.assign(plNames.size() + 1, Box{});
     for (size_t i = 0; i < plNames.size(); ++i) {
       Element row = hbox({text("  " + plNames[i]) | flex,
-                          text(std::to_string(plCounts[i]) + " pistes  ")});
+                          text(std::to_string(plCounts[i]) + " pistes  ")}) |
+                    reflect(popupRowBoxes[i]);
       if (i == ui.plSel)
         row = row | inverted;
       rows.push_back(row);
     }
-    Element add = text("  + Nouvelle playlist…");
+    Element add = text("  + Nouvelle playlist…") |
+                  reflect(popupRowBoxes[plNames.size()]);
     if (ui.plSel == plNames.size())
       add = add | inverted;
     rows.push_back(add);
@@ -296,7 +370,7 @@ int main() {
                    dim);
     return window(text(adding ? " Ajouter à une playlist " : " Playlists "),
                   vbox(std::move(rows))) |
-           size(WIDTH, EQUAL, 70);
+           size(WIDTH, EQUAL, 70) | reflect(popupPanelBox);
   };
 
   auto root = Renderer([&]() -> Element {
@@ -310,7 +384,7 @@ int main() {
   });
 
   // ---------- Handler du popup ----------
-  auto handlePopup = [&](const Event &e) -> bool {
+  auto handlePopup = [&](Event e) -> bool {
     // ---- saisie d'un nom ----
     if (ui.popup == PopupMode::NameInput) {
       if (e == Event::Escape) {
@@ -366,6 +440,31 @@ int main() {
       if (e.is_character() && ui.input.size() < 40 && e.character() != "/")
         ui.input += e.character();
       return true; // le popup capture tout
+    }
+
+    // ---- souris dans le popup ----
+    if (e.is_mouse()) {
+      const Mouse m = e.mouse();
+      if (m.motion == Mouse::Pressed && m.button == Mouse::Left) {
+        if (!inBox(popupPanelBox, m.x, m.y)) {
+          ui.popup = PopupMode::None; // clic hors du popup : on ferme
+          return true;
+        }
+        for (size_t i = 0; i < popupRowBoxes.size(); ++i) {
+          if (inBox(popupRowBoxes[i], m.x, m.y)) {
+            ui.plSel = i;
+            return true;
+          }
+        }
+        return true;
+      }
+      if ((m.button == Mouse::WheelUp || m.button == Mouse::WheelDown) &&
+          inBox(popupPanelBox, m.x, m.y)) {
+        moveSel(ui.plSel, m.button == Mouse::WheelDown ? 1 : -1,
+                plNames.size() + 1);
+        return true;
+      }
+      return true;
     }
 
     // ---- liste des playlists (Manage / AddTrack) ----
@@ -440,67 +539,66 @@ int main() {
     return true;
   };
 
-  // ---------- Événements ----------
+  // ---------- Actions ----------
   auto quit = screen.ExitLoopClosure();
 
-  root = CatchEvent(root, [&](Event e) {
-    std::lock_guard<std::mutex> lk(mtx);
-
-    if (e != Event::Custom)
-      ui.message.clear();
-    if (ui.popup != PopupMode::None)
-      return handlePopup(e);
-
-    bool inBrowser = ui.focus == Panel::Browser;
+  auto perform = [&](Action a) {
+    const bool inBrowser = ui.focus == Panel::Browser;
     const auto &es = browser.entries();
-
-    if (e == Event::Character('q')) {
+    switch (a) {
+    case Action::Quit:
       quit();
-      return true;
+      break;
+    case Action::TogglePlay:
+      player.toggle();
+      break;
+    case Action::Next:
+      player.next();
+      break;
+    case Action::Previous:
+      player.previous();
+      break;
+    case Action::SeekForward:
+      player.seekRelative(5);
+      break;
+    case Action::SeekBackward:
+      player.seekRelative(-5);
+      break;
+    case Action::VolumeUp:
+      player.setVolume(player.volume() + 0.05f);
+      break;
+    case Action::VolumeDown:
+      player.setVolume(player.volume() - 0.05f);
+      break;
+    case Action::ToggleShuffle:
+      player.queue().setShuffle(!player.queue().shuffle());
+      break;
+    case Action::ToggleRepeat: {
+      const auto m = player.queue().repeat();
+      player.queue().setRepeat(m == RepeatMode::Off   ? RepeatMode::All
+                               : m == RepeatMode::All ? RepeatMode::One
+                                                      : RepeatMode::Off);
+      break;
     }
-
-    // Navigation
-    if (e == Event::Character('j') || e == Event::ArrowDown) {
-      if (inBrowser)
-        moveSel(ui.browserSel, 1, es.size() + 1);
-      else
-        moveSel(ui.queueSel, 1, player.queue().tracks().size());
-      return true;
-    }
-    if (e == Event::Character('k') || e == Event::ArrowUp) {
+    case Action::Up:
       if (inBrowser)
         moveSel(ui.browserSel, -1, es.size() + 1);
       else
         moveSel(ui.queueSel, -1, player.queue().tracks().size());
-      return true;
-    }
-    if (e == Event::Character('h')) {
+      break;
+    case Action::Down:
+      if (inBrowser)
+        moveSel(ui.browserSel, 1, es.size() + 1);
+      else
+        moveSel(ui.queueSel, 1, player.queue().tracks().size());
+      break;
+    case Action::FocusBrowser:
       ui.focus = Panel::Browser;
-      return true;
-    }
-    if (e == Event::Character('l')) {
+      break;
+    case Action::FocusQueue:
       ui.focus = Panel::Queue;
-      return true;
-    }
-
-    // Playlists
-    if (e == Event::Character('p')) {
-      refreshPlaylists();
-      ui.plSel = 0;
-      ui.popup = PopupMode::Manage;
-      return true;
-    }
-    if (e == Event::Character('P') && inBrowser && ui.browserSel > 0 &&
-        ui.browserSel <= es.size() && !es[ui.browserSel - 1].isDir) {
-      ui.pendingTrack = std::filesystem::absolute(es[ui.browserSel - 1].path);
-      refreshPlaylists();
-      ui.plSel = 0;
-      ui.popup = PopupMode::AddTrack;
-      return true;
-    }
-
-    // ⏎
-    if (e == Event::Return) {
+      break;
+    case Action::Activate: {
       if (!inBrowser) {
         player.playQueueIndex(ui.queueSel);
       } else if (ui.browserSel == 0) {
@@ -527,63 +625,218 @@ int main() {
           ui.queueSel = start;
         }
       }
-      return true;
+      break;
+    }
+    case Action::AddFile:
+      if (inBrowser && ui.browserSel > 0 && ui.browserSel <= es.size() &&
+          !es[ui.browserSel - 1].isDir)
+        player.enqueue(readTrack(es[ui.browserSel - 1].path));
+      break;
+    case Action::AddFolder:
+      if (inBrowser && ui.browserSel > 0 && ui.browserSel <= es.size() &&
+          es[ui.browserSel - 1].isDir)
+        player.enqueueAll(browser.audioFilesIn(es[ui.browserSel - 1].path));
+      break;
+    case Action::OpenPlaylists:
+      refreshPlaylists();
+      ui.plSel = 0;
+      ui.popup = PopupMode::Manage;
+      break;
+    case Action::AddToPlaylist:
+      if (inBrowser && ui.browserSel > 0 && ui.browserSel <= es.size() &&
+          !es[ui.browserSel - 1].isDir) {
+        ui.pendingTrack = std::filesystem::absolute(es[ui.browserSel - 1].path);
+        refreshPlaylists();
+        ui.plSel = 0;
+        ui.popup = PopupMode::AddTrack;
+      }
+      break;
+    }
+  };
+
+  auto clickRow = [&](Panel p, size_t idx) {
+    const auto now = std::chrono::steady_clock::now();
+    const bool dbl = lastClickPanel == p && lastClickRow == (long)idx &&
+                     now - lastClick < std::chrono::milliseconds(400);
+    if (p == Panel::Browser) {
+      ui.focus = Panel::Browser;
+      ui.browserSel = idx;
+    } else {
+      ui.focus = Panel::Queue;
+      ui.queueSel = idx;
+    }
+    if (dbl)
+      perform(Action::Activate);
+    lastClickPanel = p;
+    lastClickRow = (long)idx;
+    lastClick = now;
+  };
+
+  root = CatchEvent(root, [&](Event e) {
+    std::lock_guard<std::mutex> lk(mtx);
+
+    if (e != Event::Custom)
+      ui.message.clear();
+    if (ui.popup != PopupMode::None)
+      return handlePopup(e);
+
+    // ---- Souris ----
+    if (e.is_mouse()) {
+      const Mouse m = e.mouse();
+      if (m.motion == Mouse::Released) {
+        dragProgress = false;
+        dragVolume = false;
+        return true;
+      }
+      if (m.button == Mouse::Left) {
+        if (m.motion == Mouse::Pressed) {
+          if (inBox(prevBox, m.x, m.y)) {
+            perform(Action::Previous);
+            return true;
+          }
+          if (inBox(playBox, m.x, m.y)) {
+            perform(Action::TogglePlay);
+            return true;
+          }
+          if (inBox(nextBox, m.x, m.y)) {
+            perform(Action::Next);
+            return true;
+          }
+          if (inBox(shuffleBox, m.x, m.y)) {
+            perform(Action::ToggleShuffle);
+            return true;
+          }
+          if (inBox(repeatBox, m.x, m.y)) {
+            perform(Action::ToggleRepeat);
+            return true;
+          }
+          if (inBox(progressBox, m.x, m.y) && player.duration() > 0) {
+            dragProgress = true;
+            player.seekTo(fracInBox(progressBox, m.x) * player.duration());
+            return true;
+          }
+          if (inBox(volumeBox, m.x, m.y)) {
+            dragVolume = true;
+            player.setVolume(fracInBox(volumeBox, m.x));
+            return true;
+          }
+          for (size_t i = 0; i < browserRowBoxes.size(); ++i) {
+            if (inBox(browserRowBoxes[i], m.x, m.y)) {
+              clickRow(Panel::Browser, i);
+              return true;
+            }
+          }
+          for (size_t i = 0; i < queueRowBoxes.size(); ++i) {
+            if (inBox(queueRowBoxes[i], m.x, m.y)) {
+              clickRow(Panel::Queue, i);
+              return true;
+            }
+          }
+        } else if (m.motion == Mouse::Moved) {
+          if (dragProgress && player.duration() > 0) {
+            player.seekTo(fracInBox(progressBox, m.x) * player.duration());
+            return true;
+          }
+          if (dragVolume) {
+            player.setVolume(fracInBox(volumeBox, m.x));
+            return true;
+          }
+        }
+      }
+      if (m.button == Mouse::WheelUp || m.button == Mouse::WheelDown) {
+        const int dir = m.button == Mouse::WheelDown ? 1 : -1;
+        if (inBox(volumeBox, m.x, m.y)) {
+          player.setVolume(player.volume() +
+                           (m.button == Mouse::WheelUp ? 0.05f : -0.05f));
+          return true;
+        }
+        if (inBox(browserPanelBox, m.x, m.y)) {
+          moveSel(ui.browserSel, dir, browser.entries().size() + 1);
+          return true;
+        }
+        if (inBox(queuePanelBox, m.x, m.y)) {
+          moveSel(ui.queueSel, dir, player.queue().tracks().size());
+          return true;
+        }
+      }
+      return false;
     }
 
-    // Ajouts à la file
-    if (e == Event::Character('a') && inBrowser && ui.browserSel > 0 &&
-        ui.browserSel <= es.size()) {
-      const auto &entry = es[ui.browserSel - 1];
-      if (!entry.isDir)
-        player.enqueue(readTrack(entry.path));
+    // ---- Clavier ----
+    if (e == Event::Character('q')) {
+      perform(Action::Quit);
       return true;
     }
-    if (e == Event::Character('A') && inBrowser && ui.browserSel > 0 &&
-        ui.browserSel <= es.size()) {
-      const auto &entry = es[ui.browserSel - 1];
-      if (entry.isDir)
-        player.enqueueAll(browser.audioFilesIn(entry.path));
+    if (e == Event::Character('j') || e == Event::ArrowDown) {
+      perform(Action::Down);
       return true;
     }
-
-    // Transport
+    if (e == Event::Character('k') || e == Event::ArrowUp) {
+      perform(Action::Up);
+      return true;
+    }
+    if (e == Event::Character('h')) {
+      perform(Action::FocusBrowser);
+      return true;
+    }
+    if (e == Event::Character('l')) {
+      perform(Action::FocusQueue);
+      return true;
+    }
+    if (e == Event::Character('p')) {
+      perform(Action::OpenPlaylists);
+      return true;
+    }
+    if (e == Event::Character('P')) {
+      perform(Action::AddToPlaylist);
+      return true;
+    }
+    if (e == Event::Return) {
+      perform(Action::Activate);
+      return true;
+    }
+    if (e == Event::Character('a')) {
+      perform(Action::AddFile);
+      return true;
+    }
+    if (e == Event::Character('A')) {
+      perform(Action::AddFolder);
+      return true;
+    }
     if (e == Event::Character(' ')) {
-      player.toggle();
+      perform(Action::TogglePlay);
       return true;
     }
     if (e == Event::Character('n')) {
-      player.next();
+      perform(Action::Next);
       return true;
     }
     if (e == Event::Character('b')) {
-      player.previous();
+      perform(Action::Previous);
       return true;
     }
     if (e == Event::ArrowRight) {
-      player.seekRelative(5);
+      perform(Action::SeekForward);
       return true;
     }
     if (e == Event::ArrowLeft) {
-      player.seekRelative(-5);
+      perform(Action::SeekBackward);
       return true;
     }
     if (e == Event::Character('+') || e == Event::Character('=')) {
-      player.setVolume(player.volume() + 0.05f);
+      perform(Action::VolumeUp);
       return true;
     }
     if (e == Event::Character('-')) {
-      player.setVolume(player.volume() - 0.05f);
+      perform(Action::VolumeDown);
       return true;
     }
     if (e == Event::Character('s')) {
-      player.queue().setShuffle(!player.queue().shuffle());
+      perform(Action::ToggleShuffle);
       return true;
     }
     if (e == Event::Character('r')) {
-      auto m = player.queue().repeat();
-      player.queue().setRepeat(m == RepeatMode::Off   ? RepeatMode::All
-                               : m == RepeatMode::All ? RepeatMode::One
-                                                      : RepeatMode::Off);
+      perform(Action::ToggleRepeat);
       return true;
     }
     return false;
