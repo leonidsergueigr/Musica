@@ -1,7 +1,9 @@
+#include "Player.hpp"
 #include "PlaylistStore.hpp"
 #include "Queue.hpp"
 #include "Spectrum.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -24,6 +26,65 @@ static Track makeTrack(const std::string &title) {
   t.path = fs::path(title + ".mp3");
   t.title = title;
   return t;
+}
+
+class FakePlaybackEngine : public PlaybackEngine {
+public:
+  bool loaded = false;
+  bool running = false;
+  bool startAllowed = true;
+
+  bool load(const std::string &) override {
+    loaded = true;
+    running = false;
+    return true;
+  }
+  void unload() override { loaded = running = false; }
+  bool play() override {
+    running = loaded && startAllowed;
+    return running;
+  }
+  void pause() override { running = false; }
+  void gotoSecond(float) override {}
+  float getDuration() override { return 0; }
+  bool isFinish() override { return false; }
+  void setVolume(float) override {}
+  float getCurrentPosition() override { return 0; }
+  void getRecentSamples(float *out, size_t n) const override {
+    std::fill_n(out, n, 0.f);
+  }
+  int sampleRate() const override { return 44100; }
+};
+
+static bool testPlayback() {
+  FakePlaybackEngine engine;
+  Player player(engine);
+  player.toggle();
+  CHECK(!player.isPlaying() && !engine.running);
+
+  player.enqueue(makeTrack("A"));
+  player.toggle();
+  CHECK(player.isPlaying() && engine.running);
+  player.toggle();
+  CHECK(!player.isPlaying() && !engine.running && engine.loaded);
+  player.toggle();
+  CHECK(player.isPlaying() && engine.running);
+
+  player.removeQueueIndex(0);
+  CHECK(!player.currentTrack() && !player.isPlaying());
+  CHECK(!engine.loaded && !engine.running);
+  player.toggle();
+  CHECK(!player.isPlaying() && !engine.running);
+
+  player.enqueue(makeTrack("B"));
+  engine.startAllowed = false;
+  player.playQueueIndex(0);
+  CHECK(!player.isPlaying());
+  player.toggle();
+  CHECK(!player.isPlaying());
+  player.clear();
+  CHECK(!engine.loaded && !player.currentTrack());
+  return true;
 }
 
 static bool testQueue() {
@@ -116,5 +177,7 @@ static bool testSpectrum() {
 }
 
 int main() {
-  return testQueue() && testPlaylists() && testSpectrum() ? 0 : 1;
+  const bool ok =
+      testPlayback() && testQueue() && testPlaylists() && testSpectrum();
+  return ok ? 0 : 1;
 }

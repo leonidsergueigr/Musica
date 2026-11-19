@@ -1,11 +1,13 @@
 #pragma once
-#include "AudioEngine.hpp"
+#include "PlaybackEngine.hpp"
 #include "Queue.hpp"
 #include "Spectrum.hpp"
 
 class Player {
 public:
-  bool init() { return engine_.isInitialized(); }
+  explicit Player(PlaybackEngine &engine) : engine_(engine) {}
+  Player(const Player &) = delete;
+  Player &operator=(const Player &) = delete;
 
   Queue &queue() { return queue_; }
   void playQueueIndex(size_t i);
@@ -37,7 +39,7 @@ public:
 
 private:
   void loadCurrent(bool startPlaying);
-  AudioEngine engine_;
+  PlaybackEngine &engine_;
   Queue queue_;
   float volume_ = 1.0f;
   bool playing_ = false;

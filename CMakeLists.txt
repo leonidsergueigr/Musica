@@ -143,6 +143,7 @@ if(MUSICA_BUILD_TESTS)
     enable_testing()
     add_executable(musica_tests
         tests/test_core.cpp
+        src/Player.cpp
         src/Queue.cpp
         src/PlaylistStore.cpp
         src/Spectrum.cpp
