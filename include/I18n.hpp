@@ -66,6 +66,16 @@ enum class Lang { En, Fr };
   X(ErrAddFailed, "Failed to add the track", "Échec de l'ajout")               \
   X(MsgPlaylistQueued, "Playlist added to the queue",                          \
     "Playlist ajoutée à la file")                                              \
+  X(MsgPlaylistQueuedMissing, "Playlist added to the queue ({0} missing)",      \
+    "Playlist ajoutée à la file ({0} introuvable(s))")                         \
+  X(MsgPlaylistMissing, "{0} track(s) not found",                              \
+    "{0} piste(s) introuvable(s)")                                             \
+  X(ErrPlaylistEmpty, "No track available in “{0}”",                           \
+    "Aucune piste disponible dans « {0} »")                                    \
+  X(ErrSaveFailed, "Failed to save the playlist",                              \
+    "Échec de la sauvegarde de la playlist")                                   \
+  X(ErrDeleteFailed, "Failed to delete the playlist",                          \
+    "Échec de la suppression de la playlist")                                  \
   X(MsgQueueSaved, "Queue saved as “{0}”", "File sauvegardée sous « {0} »")    \
   X(MsgRemoved, "Deleted “{0}”", "« {0} » supprimée")                          \
   X(MsgRenamed, "Renamed to “{0}”", "Renommée en « {0} »")                     \

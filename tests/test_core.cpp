@@ -5,10 +5,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
+#include <sys/resource.h>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -126,31 +130,93 @@ static bool testQueue() {
   return true;
 }
 
+static std::string readBytes(const fs::path &p) {
+  std::ifstream f(p, std::ios::binary);
+  return std::string(std::istreambuf_iterator<char>(f),
+                     std::istreambuf_iterator<char>());
+}
+
 static bool testPlaylists() {
   char tmpl[] = "/tmp/musica-tests-XXXXXX";
   const char *dir = mkdtemp(tmpl);
   CHECK(dir != nullptr);
   setenv("XDG_CONFIG_HOME", dir, 1);
+  const fs::path cfg(dir);
+  const fs::path plDir = cfg / "musica" / "playlists";
 
   PlaylistStore store;
   CHECK(store.list().empty());
   CHECK(store.create("Road"));
   CHECK(!store.create("Road"));
 
+  std::vector<fs::path> loaded;
+  // A valid empty playlist is readable, not an error.
+  CHECK(store.load("Road", loaded));
+  CHECK(loaded.empty());
+
   const std::vector<fs::path> tracks = {"/music/a.mp3", "/music/b.mp3"};
   CHECK(store.save("Road", tracks));
-  CHECK(store.load("Road") == tracks);
+  CHECK(store.load("Road", loaded));
+  CHECK(loaded == tracks);
   CHECK(store.addTrack("Road", "/music/c.mp3"));
-  CHECK(store.load("Road").size() == 3);
-  CHECK(store.load("Road")[2].is_absolute());
+  CHECK(store.load("Road", loaded));
+  CHECK(loaded.size() == 3);
+  CHECK(loaded[2].is_absolute());
+
+  // An unreadable playlist must make addTrack fail instead of rewriting it as
+  // a one-track list. A directory at the .m3u path fails even as root.
+  std::error_code ec;
+  CHECK(fs::create_directory(plDir / "Broken.m3u", ec) && !ec);
+  CHECK(!store.addTrack("Broken", "/music/d.mp3"));
+  CHECK(fs::is_directory(plDir / "Broken.m3u"));
+
+  // CRLF, comments, relative paths with spaces and a duplicate, read while the
+  // working directory is somewhere else.
+  const fs::path cwdBefore = fs::current_path();
+  fs::create_directories(cfg / "elsewhere");
+  fs::current_path(cfg / "elsewhere");
+  {
+    std::ofstream f(plDir / "Portable.m3u", std::ios::binary | std::ios::trunc);
+    f << "#EXTM3U\r\n"
+         "#EXTINF:12,Artist - Title\r\n"
+         "\r\n"
+         "album one/a b.mp3\r\n"
+         "/srv/absolute/x.mp3\r\n"
+         "album one/a b.mp3\r\n";
+  }
+  CHECK(store.load("Portable", loaded));
+  CHECK(loaded.size() == 3);
+  CHECK(loaded[0] == plDir / "album one/a b.mp3");
+  CHECK(loaded[1] == fs::path("/srv/absolute/x.mp3"));
+  CHECK(loaded[2] == plDir / "album one/a b.mp3");
+  fs::current_path(cwdBefore);
+
+  // A failed save keeps the original byte for byte and leaves no temp file.
+  CHECK(store.save("Safe", {"/music/safe.mp3"}));
+  const fs::path safeFile = plDir / "Safe.m3u";
+  const std::string before = readBytes(safeFile);
+  struct rlimit oldLimit {};
+  CHECK(getrlimit(RLIMIT_FSIZE, &oldLimit) == 0);
+  struct rlimit smallLimit = oldLimit;
+  smallLimit.rlim_cur = 4;
+  const auto oldHandler = std::signal(SIGXFSZ, SIG_IGN);
+  CHECK(setrlimit(RLIMIT_FSIZE, &smallLimit) == 0);
+  const bool failed =
+      store.save("Safe", {"/music/one.mp3", "/music/two.mp3"});
+  CHECK(setrlimit(RLIMIT_FSIZE, &oldLimit) == 0);
+  std::signal(SIGXFSZ, oldHandler);
+  CHECK(!failed);
+  CHECK(readBytes(safeFile) == before);
+  for (const auto &entry : fs::directory_iterator(plDir))
+    CHECK(entry.path().filename().string().find(".tmp") == std::string::npos);
 
   CHECK(store.rename("Road", "Trip"));
-  CHECK(store.list() == std::vector<std::string>{"Trip"});
+  CHECK((store.list() == std::vector<std::string>{"Broken", "Portable", "Safe",
+                                                    "Trip"}));
   CHECK(store.remove("Trip"));
-  CHECK(store.list().empty());
 
-  std::error_code ec;
   fs::remove_all(dir, ec);
+  unsetenv("XDG_CONFIG_HOME");
   return true;
 }
 
