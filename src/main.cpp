@@ -1,3 +1,4 @@
+#include "AudioEngine.hpp"
 #include "CoverArt.hpp"
 #include "FileBrowser.hpp"
 #include "I18n.hpp"
@@ -277,9 +278,10 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  Player player;
-  if (!player.init())
+  AudioEngine engine;
+  if (!engine.isInitialized())
     return 1;
+  Player player(engine);
   std::filesystem::path startDir = std::filesystem::current_path();
   if (!saved.lastDir.empty()) {
     std::error_code dirEc;

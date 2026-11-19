@@ -18,10 +18,7 @@ void Player::loadCurrent(bool start) {
       break;
     if (engine_.load(t->path.string())) {
       engine_.setVolume(volume_);
-      if (start) {
-        engine_.play();
-        playing_ = true;
-      }
+      playing_ = start && engine_.play();
       if (skipped > 0) {
         skippedCount_ += static_cast<int>(skipped);
         loadError_ = true;
@@ -58,8 +55,7 @@ void Player::removeQueueIndex(size_t i) {
   if (!queue_.remove(i))
     return;
   if (queue_.tracks().empty()) {
-    engine_.pause();
-    playing_ = false;
+    clear();
   } else if (wasCurrent) {
     loadCurrent(wasPlaying);
   }
@@ -70,7 +66,7 @@ void Player::moveQueueIndex(size_t i, int delta) {
 }
 
 void Player::clear() {
-  engine_.pause();
+  engine_.unload();
   queue_.clear();
   playing_ = false;
   loadError_ = false;
@@ -86,8 +82,7 @@ void Player::enqueue(const Track &t) {
 }
 
 void Player::play() {
-  engine_.play();
-  playing_ = true;
+  playing_ = queue_.current() && engine_.play();
 }
 void Player::pause() {
   engine_.pause();

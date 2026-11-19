@@ -1,5 +1,6 @@
 #pragma once
 
+#include "PlaybackEngine.hpp"
 #include "miniaudio.h"
 
 #include <atomic>
@@ -14,7 +15,7 @@ struct TapNode {
   std::atomic<size_t> writePos{0};
 };
 
-class AudioEngine {
+class AudioEngine : public PlaybackEngine {
 private:
   ma_engine engine_;
   ma_sound sound_;
@@ -23,26 +24,26 @@ private:
   bool tapInitialized_ = false;
   bool isLoaded_ = false;
   float volume_ = 1.0f;
-  void unload();
   void initTap();
 
 public:
   AudioEngine();
-  ~AudioEngine();
+  ~AudioEngine() override;
   AudioEngine(const AudioEngine &) = delete;
   AudioEngine &operator=(const AudioEngine &) = delete;
 
-  bool load(const std::string &filename);
-  void play();
-  void pause();
-  void gotoSecond(float seconds);
-  float getDuration();
-  bool isFinish();
-  void setVolume(float volume);
+  bool load(const std::string &filename) override;
+  void unload() override;
+  bool play() override;
+  void pause() override;
+  void gotoSecond(float seconds) override;
+  float getDuration() override;
+  bool isFinish() override;
+  void setVolume(float volume) override;
   float getVolume() const { return volume_; }
   bool isInitialized() const { return engineInitialized_; }
-  float getCurrentPosition();
+  float getCurrentPosition() override;
 
-  void getRecentSamples(float *out, size_t n) const;
-  int sampleRate() const;
+  void getRecentSamples(float *out, size_t n) const override;
+  int sampleRate() const override;
 };

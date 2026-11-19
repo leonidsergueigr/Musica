@@ -121,9 +121,8 @@ bool AudioEngine::load(const std::string &filename) {
   return isLoaded_;
 }
 
-void AudioEngine::play() {
-  if (isLoaded_)
-    ma_sound_start(&sound_);
+bool AudioEngine::play() {
+  return isLoaded_ && ma_sound_start(&sound_) == MA_SUCCESS;
 }
 
 void AudioEngine::pause() {
