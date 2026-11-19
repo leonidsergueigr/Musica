@@ -360,8 +360,10 @@ int main(int argc, char **argv) {
   auto refreshPlaylists = [&] {
     plNames = store.list();
     plCounts.clear();
-    for (auto &n : plNames)
-      plCounts.push_back(store.load(n).size());
+    for (auto &n : plNames) {
+      std::vector<std::filesystem::path> tracks;
+      plCounts.push_back(store.load(n, tracks) ? tracks.size() : 0);
+    }
     // One extra row for "New playlist".
     ui.plSel = std::min(ui.plSel, plNames.size());
   };
@@ -860,10 +862,14 @@ int main(int argc, char **argv) {
 
     if (ui.popup == PopupMode::ConfirmDelete) {
       if (e == Event::Character('y') || e == Event::Character('o')) {
-        store.remove(ui.target);
-        refreshPlaylists();
-        ui.message = trf(Str::MsgRemoved, {ui.target});
-        ui.messageIsError = false;
+        if (store.remove(ui.target)) {
+          refreshPlaylists();
+          ui.message = trf(Str::MsgRemoved, {ui.target});
+          ui.messageIsError = false;
+        } else {
+          ui.message = tr(Str::ErrDeleteFailed);
+          ui.messageIsError = true;
+        }
         ui.popup = PopupMode::None;
       } else if (e == Event::Escape || e == Event::Character('n') ||
                  e == Event::Character('q')) {
@@ -898,28 +904,43 @@ int main(int argc, char **argv) {
       }
       if (e == Event::Return) {
         const std::string name = ui.input;
+        std::string error;
         bool ok = false;
-        switch (ui.nameAction) {
-        case NameAction::Create:
-          ok = !name.empty() && store.create(name);
-          break;
-        case NameAction::CreateAndAdd:
-          ok = !name.empty() && store.create(name) &&
-               store.addTrack(name, ui.pendingTrack);
-          break;
-        case NameAction::Rename:
-          ok = !name.empty() && store.rename(ui.target, name);
-          break;
-        case NameAction::SaveQueue: {
-          std::vector<std::filesystem::path> ps;
-          for (auto &t : player.queue().tracks())
-            ps.push_back(t.path);
-          ok = !name.empty() && store.save(name, ps);
-          break;
-        }
+        if (name.empty()) {
+          error = tr(Str::ErrInvalidName);
+        } else {
+          switch (ui.nameAction) {
+          case NameAction::Create:
+            ok = store.create(name);
+            if (!ok)
+              error = tr(Str::ErrInvalidName);
+            break;
+          case NameAction::CreateAndAdd:
+            if (!store.create(name))
+              error = tr(Str::ErrInvalidName);
+            else if (!store.addTrack(name, ui.pendingTrack))
+              error = tr(Str::ErrSaveFailed);
+            else
+              ok = true;
+            break;
+          case NameAction::Rename:
+            ok = store.rename(ui.target, name);
+            if (!ok)
+              error = tr(Str::ErrInvalidName);
+            break;
+          case NameAction::SaveQueue: {
+            std::vector<std::filesystem::path> ps;
+            for (auto &t : player.queue().tracks())
+              ps.push_back(t.path);
+            ok = store.save(name, ps);
+            if (!ok)
+              error = tr(Str::ErrSaveFailed);
+            break;
+          }
+          }
         }
         if (!ok) {
-          ui.error = tr(Str::ErrInvalidName);
+          ui.error = error;
           return true;
         }
         if (ui.nameAction == NameAction::CreateAndAdd) {
@@ -989,16 +1010,34 @@ int main(int argc, char **argv) {
         bool ok = store.addTrack(plNames[ui.plSel], ui.pendingTrack);
         ui.message = ok ? trf(Str::MsgAddedTo, {plNames[ui.plSel]})
                         : std::string(tr(Str::ErrAddFailed));
+        ui.messageIsError = !ok;
         ui.popup = PopupMode::None;
       } else {
-        std::vector<Track> tracks;
-        for (auto &p : store.load(plNames[ui.plSel]))
-          if (std::filesystem::exists(p))
-            tracks.push_back(cachedTrack(p));
-        if (!tracks.empty()) {
-          player.queue().replace(std::move(tracks));
-          player.playQueueIndex(0);
-          ui.queueSel = 0;
+        std::vector<std::filesystem::path> paths;
+        if (!store.load(plNames[ui.plSel], paths)) {
+          ui.message = trf(Str::ErrReadFile, {plNames[ui.plSel]});
+          ui.messageIsError = true;
+        } else {
+          std::vector<Track> tracks;
+          size_t missing = 0;
+          for (auto &p : paths) {
+            if (std::filesystem::exists(p))
+              tracks.push_back(cachedTrack(p));
+            else
+              ++missing;
+          }
+          if (tracks.empty()) {
+            ui.message = trf(Str::ErrPlaylistEmpty, {plNames[ui.plSel]});
+            ui.messageIsError = true;
+          } else {
+            player.queue().replace(std::move(tracks));
+            player.playQueueIndex(0);
+            ui.queueSel = 0;
+            ui.messageIsError = missing > 0;
+            if (missing > 0)
+              ui.message = trf(Str::MsgPlaylistMissing,
+                               {std::to_string(missing)});
+          }
         }
         ui.popup = PopupMode::None;
       }
@@ -1019,10 +1058,33 @@ int main(int argc, char **argv) {
 
     const std::string name = plNames[ui.plSel];
     if (e == Event::Character('a')) {
-      for (auto &p : store.load(name))
-        if (std::filesystem::exists(p))
+      std::vector<std::filesystem::path> paths;
+      if (!store.load(name, paths)) {
+        ui.message = trf(Str::ErrReadFile, {name});
+        ui.messageIsError = true;
+      } else {
+        size_t added = 0;
+        size_t missing = 0;
+        for (auto &p : paths) {
+          if (!std::filesystem::exists(p)) {
+            ++missing;
+            continue;
+          }
           player.enqueue(cachedTrack(p));
-      ui.message = tr(Str::MsgPlaylistQueued);
+          ++added;
+        }
+        if (added == 0) {
+          ui.message = trf(Str::ErrPlaylistEmpty, {name});
+          ui.messageIsError = true;
+        } else if (missing > 0) {
+          ui.message = trf(Str::MsgPlaylistQueuedMissing,
+                           {std::to_string(missing)});
+          ui.messageIsError = true;
+        } else {
+          ui.message = tr(Str::MsgPlaylistQueued);
+          ui.messageIsError = false;
+        }
+      }
       ui.popup = PopupMode::None;
     } else if (e == Event::Character('r')) {
       ui.target = name;

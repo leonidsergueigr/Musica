@@ -1,6 +1,8 @@
 #include "PlaylistStore.hpp"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstdlib>
 #include <fstream>
 
@@ -49,28 +51,73 @@ bool PlaylistStore::rename(const std::string &a, const std::string &b) {
   return !ec;
 }
 
-std::vector<fs::path> PlaylistStore::load(const std::string &n) const {
-  std::vector<fs::path> out;
-  std::ifstream f(fileFor(n));
+bool PlaylistStore::load(const std::string &n,
+                         std::vector<fs::path> &out) const {
+  out.clear();
+  const fs::path file = fileFor(n);
+  std::ifstream f(file);
+  if (!f)
+    return false;
+  const fs::path base = file.parent_path();
   std::string line;
-  while (std::getline(f, line))
-    if (!line.empty() && line[0] != '#')
-      out.emplace_back(line);
-  return out;
+  while (std::getline(f, line)) {
+    // M3U files written on Windows keep a CR before the LF.
+    if (!line.empty() && line.back() == '\r')
+      line.pop_back();
+    if (line.empty() || line[0] == '#')
+      continue;
+    const fs::path p(line);
+    // Relative entries belong to the playlist's folder, not to the process
+    // working directory.
+    out.push_back(p.is_absolute() ? p : base / p);
+  }
+  if (f.bad()) {
+    out.clear();
+    return false;
+  }
+  return true;
 }
 
 bool PlaylistStore::save(const std::string &n, const std::vector<fs::path> &t) {
-  std::ofstream f(fileFor(n), std::ios::trunc);
+  const fs::path dest = fileFor(n);
+  const fs::path dir = dest.parent_path();
+
+  // Write next to the destination, then rename over it: the original is never
+  // truncated, so a failed write leaves it untouched.
+  static std::atomic<unsigned long> seq{0};
+  const auto stamp =
+      std::chrono::steady_clock::now().time_since_epoch().count();
+  fs::path tmp;
+  do {
+    tmp = dir / (".musica-playlist-" + std::to_string(stamp) + "-" +
+                 std::to_string(seq.fetch_add(1)) + ".tmp");
+  } while (fs::exists(tmp));
+
+  std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
   if (!f)
     return false;
   f << "#EXTM3U\n";
   for (auto &p : t)
     f << p.string() << '\n';
+  f.close();
+  std::error_code ec;
+  if (f.fail()) {
+    fs::remove(tmp, ec);
+    return false;
+  }
+
+  fs::rename(tmp, dest, ec);
+  if (ec) {
+    fs::remove(tmp, ec);
+    return false;
+  }
   return true;
 }
 
 bool PlaylistStore::addTrack(const std::string &n, const fs::path &track) {
-  auto tracks = load(n);
+  std::vector<fs::path> tracks;
+  if (!load(n, tracks))
+    return false;
   tracks.push_back(fs::absolute(track));
   return save(n, tracks);
 }

@@ -12,7 +12,10 @@ public:
   bool remove(const std::string &name);
   bool rename(const std::string &oldName, const std::string &newName);
 
-  std::vector<std::filesystem::path> load(const std::string &name) const;
+  // Returns false when the playlist cannot be read; a readable empty playlist
+  // is a success with an empty track list.
+  bool load(const std::string &name,
+            std::vector<std::filesystem::path> &tracks) const;
   bool save(const std::string &name,
             const std::vector<std::filesystem::path> &tracks);
   bool addTrack(const std::string &name, const std::filesystem::path &track);

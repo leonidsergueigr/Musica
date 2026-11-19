@@ -83,7 +83,7 @@ générées par `demo/make-media.sh`.
 | `L` | Changer de langue |
 | `q` | Quitter |
 
-Dans le popup playlists : `⏎` charger, `a` ajouter la file, `s` sauver la file,
+Dans le popup playlists : `⏎` charger, `a` ajouter la playlist à la file, `s` sauver la file,
 `r` renommer, `d` supprimer (confirmation o/n).
 
 Souris : clic pour sélectionner, double-clic pour jouer, molette pour
